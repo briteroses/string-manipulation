@@ -1,0 +1,16 @@
+accelerate==0.28.0
+bitsandbytes==0.43.0
+cohere==4.48
+datasets==2.18.0
+google-generativeai==0.3.2
+hf_transfer==0.1.6
+huggingface-hub==0.20.3
+openai==1.12.0
+peft==0.10.0
+seaborn==0.13.2
+tiktoken==0.6.0
+tokenizers==0.15.2
+torch==2.2.0
+tqdm==4.66.2
+transformers==4.37.2
+vllm==0.2.4

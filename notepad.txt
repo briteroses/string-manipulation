@@ -1,0 +1,81 @@
+shieldbreak
+ > apis: Contains wrappers and utilities for interacting with external APIs
+				 like allenai WIMBD, openlogprobs, and various model APIs
+				 (GPT-4, Claude, Gemini).
+			wimbd.py: Wrapper for the allenai WIMBD tool, including regex support 
+								and API interaction.
+			openlogprobs.py: Interface for OpenLogProbs API, handling secure API key
+                            usage and query formation.
+			model_apis.py: Generic API interface module for interacting with
+                            different black-box models, with subclasses for
+                            each specific model.
+ > models: Abstractions and interfaces for interacting with both black-box
+					 and open-source base models.
+			base_model.py: Abstract base class defining common model interface methods.
+			black_box_model.py: Implements the interface for black-box models,
+                                utilizing apis/model_apis.py.
+			open_source_model.py: Implements the interface for open-source models,
+                                with support for different sizes and cloud-based
+                                distributed inference.
+> utils: Utility scripts and common functions used across the project.
+			regex_tools.py: Tools for constructing and iterating through regexes
+							for token mutations.
+			string_manipulation.py: Functions for string manipulation tasks,
+									transformable into model inputs.
+> experiments: Core experiment scripts.
+			wimbd_manual_search.py
+			top_k_bottom_k.py
+			confounding_string_manipulation.py
+> data: Storage for experiment data, results, and any necessary datasets.
+			[whatever_naming_hierarchy_we_want]
+> configs: Configuration files for experiments, models, and APIs.
+            Helps in easily tuning parameters and swapping components.
+        config_wimbd_manual_search
+        config_top_k_bottom_k
+        config_confounding_string_manipulation
+main.py: Entry point of the codebase, orchestrating the experiments
+        and handling command-line arguments or configurations.
+requirements.txt: Lists all the Python package dependencies for the project.
+
+~~~~~~~~~~
+asr scorer
+ - command line functionality for asr; iterate or stream model continuations, manually input yes/no
+	script aggregates human labels and outputs asr at the end
+	good logging: save entire record to a .log file, make .csv file tabling continuations w/ human labels
+string manipulation
+ - base experiment runner
+ 	- take in any f(str) -> str, take in jailbreak prompt, optionally take in benign ICL exemplars
+	- run zero-shot with f(jailbreak) or few-shot with tup(f(exemplar) for exemplar in exemplars, f(jailbreak))
+ - scaling law runner
+	- run the same [f(str) -> str] on array of jailbreak prompts and array of models.
+		wrapper class for f(str) -> str with description, maybe subjective level of difficulty?
+		model scale comes from model descriptions
+TKBK
+ - mechanism for picking next token in a TKBK attack
+	- take in malintended prompt, strong proxy model, base model
+		[strong proxy model can be the target model or any safety-tuned strong model (hope for transfer)]
+		[base model can be any base model but preferably same family as strong proxy model]
+	- hyperparams: jailbreak integration mode, TK, BK, weightings
+		jailbreak integration mode: how do we integrate the TKBK tokens w/ the malintended prompt? prefix, suffix, or interleave?
+		TK, BK: how much top-k and bottom-k resp. to limit the search to?
+			(can default to vocab sizes, but a necessary optional restriction if we use black-box apis with top-k)
+		weightings: say we're picking the token (corresp. logit) that gets the best
+						alpha * logit_tuned + beta * logit_base
+					then we can tune the alpha and beta. good default values alpha = -1, beta = 1?
+					nonlinear relationships possible? what makes the most sense from theoretical standpoint?
+					can we get something rigorous out of probability distances?
+ - experiment runner
+	- take in malintended prompt, target model, strong proxy model, base model
+	- adversarial prompt = mechanism(malintended prompt, strong proxy model, base model)
+	- get continuation of adversarial prompt from target model
+	- loop above steps for asr scorer
+
+
+
+WIMBD
+ - this is the most costly experiment:
+ 	need to download and host some web-scale datasets
+		(possibly apply and wait for permission for some datasets)
+	get wimbd to integrate with remotely served datasets, like AWS S3?
+	figure out how to general-query for n-grams "one induction head away" from exact matches
+ - can be approximated with wimbd demo page; static, but displays several top n-grams not present in the paper
