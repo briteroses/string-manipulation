@@ -124,9 +124,131 @@ class OpenSourceModel(LanguageModel):
         torch.cuda.empty_cache()
 
 
+# ~~~~~~~~~~~~~~~~~~~~ LLAMA (META) ~~~~~~~~~~~~~~~~~~~~
+
+@dataclass
+class LlamaFamily(OpenSourceModel):
+    def __post_init__(self):
+        self.eos_token_ids.extend([self.tokenizer.encode("}")[1], 29913, 9092, 16675])
+        super().__post_init__()
+
+@dataclass
+class Llama2(LlamaFamily):
+    def __post_init__(self):
+        self.tokenizer.pad_token = "[PAD]"
+        self.tokenizer.padding_side = "left"
+        super().__post_init__()
+
+@dataclass
+class Llama2_7B(Llama2):
+    name = "meta-llama/Llama-2-7b-hf"
+    description = "Small variant of Llama2 models"
+    scale = None
+
+@dataclass
+class Llama2_7B_Chat(Llama2):
+    name = "meta-llama/Llama-2-7b-chat-hf"
+    description = "Small chat variant of Llama2 models"
+    scale = None
+
+@dataclass
+class Llama2_13B(Llama2):
+    name = "meta-llama/Llama-2-13b-hf"
+    description = "Medium variant of Llama2 models"
+    scale = None
+
+@dataclass
+class Llama2_13B_Chat(Llama2):
+    name = "meta-llama/Llama-2-13b-chat-hf"
+    description = "Medium chat variant of Llama2 models"
+    scale = None
+
+@dataclass
+class Llama2_70B(Llama2):
+    name = "meta-llama/Llama-2-70b-hf"
+    description = "Large variant of Llama2 models"
+    scale = None
+
+@dataclass
+class Llama2_70B_Chat(Llama2):
+    name = "meta-llama/Llama-2-70b-chat-hf"
+    description = "Large chat variant of Llama2 models"
+    scale = None
+
+@dataclass
+class Llama3(LlamaFamily):
+    def __post_init__(self):
+        super().__post_init__()
+
+@dataclass
+class Llama3_8B(Llama2):
+    name = "meta-llama/Meta-Llama-3-8B"
+    description = "Small variant of Llama3 models"
+    scale = None
+
+@dataclass
+class Llama3_8B_Instruct(Llama2):
+    name = "meta-llama/Meta-Llama-3-8B-Instruct"
+    description = "Small instruct variant of Llama3 models"
+    scale = None
+
+@dataclass
+class Llama3_70B(Llama2):
+    name = "meta-llama/Meta-Llama-3-70B"
+    description = "Large variant of Llama3 models"
+    scale = None
+
+@dataclass
+class Llama3_70B_Chat(Llama2):
+    name = "meta-llama/Meta-Llama-3-70B-Instruct"
+    description = "Large instruct variant of Llama3 models"
+    scale = None
+
+@dataclass
+class Vicuna2(LlamaFamily):
+    def __post_init__(self):
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.tokenizer.padding_side = "left"
+        super().__post_init__()
+
+
+# ~~~~~~~~~~~~~~~~~~~~ GEMMA (GOOGLE) ~~~~~~~~~~~~~~~~~~~~
+
+@dataclass
+class GemmaFamily(OpenSourceModel):
+    def __post_init__(self):
+        super().__post_init__()
+
+@dataclass
+class Gemma_2B(GemmaFamily):
+    name = "google/gemma-2b"
+    description = "Small variant of Gemma models"
+    scale = None
+
+@dataclass
+class Gemma_2B_Instruct(GemmaFamily):
+    name = "google/gemma-2b-it"
+    description = "Small instruct variant of Gemma models"
+    scale = None
+
+@dataclass
+class Gemma_7B(GemmaFamily):
+    name = "google/gemma-7b"
+    description = "Large variant of Gemma models"
+    scale = None
+
+@dataclass
+class Gemma_7B_Instruct(GemmaFamily):
+    name = "google/gemma-7b-it"
+    description = "Large instruct variant of Gemma models"
+    scale = None
+
+# ~~~~~~~~~~~~~~~~~~~~ MISTRAL ~~~~~~~~~~~~~~~~~~~~
+
 @dataclass
 class MistralFamily(OpenSourceModel):
-    pass
+    def __post_init__(self):
+        super().__post_init__()
 
 @dataclass
 class Mistral_7B_Base(MistralFamily):
@@ -143,44 +265,172 @@ class Mistral_7B_Instruct(MistralFamily):
 @dataclass
 class Mixtral_8x7B_Base(MistralFamily):
     name = "mistralai/Mixtral-8x7B-v0.1"
-    description = "Strong MoE model, base variant, of Mistral models"
+    description = "Medium MoE model, base variant, of Mistral models"
     scale = None
 
 @dataclass
 class Mixtral_8x7B_Instruct(MistralFamily):
     name = "mistralai/Mixtral-8x7B-Instruct-v0.1"
-    description = "Strong MoE model, base variant, of Mistral models"
+    description = "Medium MoE model, instruct variant, of Mistral models"
     scale = None
 
+@dataclass
+class Mixtral_8x22B_Base(MistralFamily):
+    name = "mistralai/Mixtral-8x22B-v0.1"
+    description = "Strong MoE model, base variant, of Mistral models"
 
 @dataclass
-class LlamaFamily(OpenSourceModel):
+class Mixtral_8x22B_Instruct(MistralFamily):
+    name = "mistralai/Mixtral-8x22B-Instruct-v0.1"
+    description = "Strong MoE model, instruct variant, of Mistral models"
+
+# ~~~~~~~~~~~~~~~~~~~~ COMMAND-R (COHERE) ~~~~~~~~~~~~~~~~~~~~
+
+@dataclass
+class OpenCohereFamily(OpenSourceModel):
     def __post_init__(self):
-        self.eos_token_ids.extend([self.tokenizer.encode("}")[1], 29913, 9092, 16675])
         super().__post_init__()
 
 @dataclass
-class Llama2(LlamaFamily):
+class CommandR_Plus(OpenCohereFamily):
+    name = "CohereForAI/c4ai-command-r-plus"
+    description = "Newer version of Cohere open model. 104B params."
+
+@dataclass
+class CommandR(OpenCohereFamily):
+    name = "CohereForAI/c4ai-command-r-v01"
+    description = "Older version of Cohere open model. 35B params."
+
+# ~~~~~~~~~~~~~~~~~~~~ DATABRICKS MOSAIC ~~~~~~~~~~~~~~~~~~~~
+
+@dataclass
+class DbrxMosaicFamily(OpenSourceModel):
     def __post_init__(self):
-        self.tokenizer.pad_token = "[PAD]"
-        self.tokenizer.padding_side = "left"
         super().__post_init__()
 
 @dataclass
-class Vicuna2(LlamaFamily):
+class Dbrx(DbrxMosaicFamily):
+    name = "databricks/dbrx-base"
+    description = "Strong MoE model from Databricks Mosaic. 132B total parameters, 36B active MoE parameters."
+    scale = 132e9
+
+@dataclass
+class Dbrx_Instruct(DbrxMosaicFamily):
+    name = "databricks/dbrx-instruct"
+    description = "Instruct variant of strong MoE model from Databricks Mosaic. 132B total parameters, 36B active MoE parameters."
+    scale = 36e9
+
+# ~~~~~~~~~~~~~~~~~~~~ QWEN (ALIBABA) ~~~~~~~~~~~~~~~~~~~~
+
+@dataclass
+class QwenFamily(OpenSourceModel):
     def __post_init__(self):
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-        self.tokenizer.padding_side = "left"
         super().__post_init__()
 
 @dataclass
-class MosaicFamily(OpenSourceModel):
-    def __post_init__(self):
-        self.tokenizer.padding_side = "left"
-        super().__post_init__()
+class Qwen1pt5_0pt5B_Base(QwenFamily):
+    name = "Qwen/Qwen1.5-0.5B"
+    description = "Qwen1.5 0.5B dense base model"
+    scale = 0.5e9
 
 @dataclass
-class MPT_7B_Base(MosaicFamily):
-    name = "mosaicml/mpt-7b"
-    description = "Smallest model, base variant, in MosaicML MPT family"
-    scale = None #TODO I would imagine total train flops for MPTs are public, where do people get this info?
+class Qwen1pt5_0pt5B_Chat(QwenFamily):
+    name = "Qwen/Qwen1.5-0.5B-Chat" 
+    description = "Qwen1.5 0.5B dense chat model"
+    scale = 0.5e9
+
+@dataclass
+class Qwen1pt5_1pt8B_Base(QwenFamily):
+    name = "Qwen/Qwen1.5-1.8B"
+    description = "Qwen1.5 1.8B dense base model"
+    scale = 1.8e9
+
+@dataclass
+class Qwen1pt5_1pt8B_Chat(QwenFamily):
+    name = "Qwen/Qwen1.5-1.8B-Chat"
+    description = "Qwen1.5 1.8B dense chat model" 
+    scale = 1.8e9
+
+@dataclass
+class Qwen1pt5_4B_Base(QwenFamily):
+    name = "Qwen/Qwen1.5-4B"
+    description = "Qwen1.5 4B dense base model"
+    scale = 4e9
+
+@dataclass
+class Qwen1pt5_4B_Chat(QwenFamily):
+    name = "Qwen/Qwen1.5-4B-Chat"
+    description = "Qwen1.5 4B dense chat model"
+    scale = 4e9
+
+@dataclass
+class Qwen1pt5_7B_Base(QwenFamily):
+    name = "Qwen/Qwen1.5-7B" 
+    description = "Qwen1.5 7B dense base model"
+    scale = 7e9
+
+@dataclass
+class Qwen1pt5_7B_Chat(QwenFamily):
+    name = "Qwen/Qwen1.5-7B-Chat"
+    description = "Qwen1.5 7B dense chat model"
+    scale = 7e9
+
+@dataclass
+class Qwen1pt5_14B_Base(QwenFamily):
+    name = "Qwen/Qwen1.5-14B"
+    description = "Qwen1.5 14B dense base model"
+    scale = 14e9
+
+@dataclass 
+class Qwen1pt5_14B_Chat(QwenFamily):
+    name = "Qwen/Qwen1.5-14B-Chat"
+    description = "Qwen1.5 14B dense chat model"
+    scale = 14e9
+
+@dataclass
+class Qwen1pt5_32B_Base(QwenFamily):
+    name = "Qwen/Qwen1.5-32B"
+    description = "Qwen1.5 32B dense base model"
+    scale = 32e9
+
+@dataclass
+class Qwen1pt5_32B_Chat(QwenFamily):
+    name = "Qwen/Qwen1.5-32B-Chat"
+    description = "Qwen1.5 32B dense chat model"
+    scale = 32e9
+
+@dataclass
+class Qwen1pt5_72B_Base(QwenFamily):
+    name = "Qwen/Qwen1.5-72B"
+    description = "Qwen1.5 72B dense base model"
+    scale = 72e9
+
+@dataclass
+class Qwen1pt5_72B_Chat(QwenFamily):
+    name = "Qwen/Qwen1.5-72B-Chat"
+    description = "Qwen1.5 72B dense chat model"
+    scale = 72e9
+
+@dataclass
+class Qwen1pt5_110B_Base(QwenFamily):
+    name = "Qwen/Qwen1.5-110B"
+    description = "Qwen1.5 110B dense base model"
+    scale = 110e9
+
+@dataclass
+class Qwen1pt5_110B_Chat(QwenFamily):
+    name = "Qwen/Qwen1.5-110B-Chat"
+    description = "Qwen1.5 110B dense chat model"
+    scale = 110e9
+
+@dataclass
+class Qwen1pt5_MoE_Base(QwenFamily):
+    name = "Qwen/Qwen1.5-MoE-A2.7B"
+    description = "Qwen1.5 14B MoE base model with 2.7B activated"
+    scale = 14e9
+
+@dataclass
+class Qwen1pt5_MoE_Chat(QwenFamily):
+    name = "Qwen/Qwen1.5-MoE-A2.7B-Chat"
+    description = "Qwen1.5 14B MoE chat model with 2.7B activated"
+    scale = 14e9
