@@ -36,7 +36,6 @@ class BaseExperiment(ABC):
         assert type(self.all_parameters) == list
     
     def run_hyperparameter_grid(self):
-        #TODO abstract the idea of single runs across hyperparameter grid, move to base experiment ABC
         productable_hyperparams = {
             k: v if type(v) == list else [v, ] for k, v in self.hyperparameter_grid.items()
         }
@@ -50,9 +49,9 @@ class BaseExperiment(ABC):
         pass
 
     def destroy(self):
-        for field in self.__dict__:
-            if isinstance(getattr(self, field), LanguageModel):
-                delattr(self, field)
+        fields_to_delete = [field for field in self.__dict__ if isinstance(getattr(self, field), LanguageModel)]
+        for field in fields_to_delete:
+            delattr(self, field)
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -68,7 +67,7 @@ class BaseExperiment(ABC):
             for param in self.all_parameters
         }
         # the raw path can be arbitrarily long and then lead to OsError filename too long
-        # so we defer to part of the sha256 hash
+        # so we just use a slice of the sha256 hash
         raw_pathname = "_".join([f"{k}_{v}" for k, v in sorted(all_parameters_dict.items())])
         pathname = hashlib.sha256(raw_pathname.encode()).hexdigest()
         return pathname[:32]

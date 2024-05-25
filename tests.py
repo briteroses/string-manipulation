@@ -1,4 +1,4 @@
-from string_transformations.string_transformations import TRANSFORMATIONS_BY_NAME
+from string_transformations.string_transformations import ALL_TRANSFORMATIONS, PythonMarkdown, TokenizerAwareReversal
 from judging.llama_guard_judge import LlamaGuardJudge
 from models.black_box_model import GPTFamily, GPT4, GPT3pt5_Turbo, GPT3pt5_Turbo_Instruct, Gemini_Pro, LegacyGPT, CohereCommandLight
 from models.model_class import LanguageModel
@@ -44,20 +44,20 @@ def test_product_dict():
     print(list(hyperparam_setting))
 
 def test_string_transformations():
-    for name, transformation in TRANSFORMATIONS_BY_NAME.items():
-        print(name)
-        if name == "tokenizer-aware reversal":
-            current_transformation = transformation("gpt-4")
-        elif name == "language translation":
-            current_transformation = transformation("Spanish")
+    for transformation in ALL_TRANSFORMATIONS:
+        if issubclass(transformation, TokenizerAwareReversal):
+            current_transformation = transformation.construct(openai_model_name="gpt-4")
+        elif issubclass(transformation, PythonMarkdown):
+            current_transformation = transformation.construct(model_type=GPT4)
         else:
-            current_transformation = transformation()
+            current_transformation = transformation.construct()
         test_str = """A black hole forms from the remnants of a massive star that has ended its life cycle. When such a star depletes its nuclear fuel, it can no longer sustain the nuclear fusion reactions that counterbalance gravitational forces.
 As a result, the core collapses under its own immense gravity, leading to a supernova explosion that ejects the star's outer layers into space. If the remaining core mass is sufficiently large--typically more than about 2.5 times the mass of the Sun--it collapses to a point of infinite density known as a singularity, surrounded by an event horizon.
 
 This event horizon marks the boundary beyond which nothing, not even light, can escape the black hole's gravitational pull, rendering the black hole invisible and detectable only by its gravitational effects on nearby matter and radiation."""
         res = current_transformation(test_str)
         inverted = current_transformation.invert(res)
+        print(current_transformation)
         print(res)
         print(inverted)
         print("\n\n")

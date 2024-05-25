@@ -18,6 +18,7 @@ String transformations to implement:
     JSON
 """
 
+import random
 import base58
 import base64
 import gc
@@ -57,6 +58,10 @@ class StringTransformation:
         if not hasattr(self, "instruction"):
             raise ValueError("Must have field 'instruction', with a short text description describing how to do the transformation.")
         assert isinstance(self.name, str)
+
+    @classmethod
+    def construct(cls):
+        return cls()
 
     def __call__(self, s):
         return self._f(s)
@@ -164,89 +169,47 @@ class AtbashCipher(StringTransformation):
         self._inverse = transformation
 
 @dataclass
-class Base16(StringTransformation):
-    name = "Base16 encoding"
-    instruction = "Encode the string using Base16 encoding."
+class BaseN(StringTransformation):
+    base_number: int = field(default=64)
+    name: str = "BaseN encoding"
+    instruction: str = field(init=False)
 
     def __post_init__(self):
-        def transformation(s):
-            encoded_bytes = base64.b16encode(s.encode('utf-8'))
-            return encoded_bytes.decode('utf-8')
-        
-        def inverse_transformation(s):
-            decoded_bytes = base64.b16decode(s.encode('utf-8'))
-            return decoded_bytes.decode('utf-8')
+        if self.base_number == 16:
+            self.name = "Base16 encoding"
+            self.instruction = "Encode the string using Base16 encoding."
+            transformation = lambda s: base64.b16encode(s.encode('utf-8')).decode('utf-8')
+            inverse_transformation = lambda s: base64.b16decode(s.encode('utf-8')).decode('utf-8')
+        elif self.base_number == 32:
+            self.name = "Base32 encoding"
+            self.instruction = "Encode the string using Base32 encoding."
+            transformation = lambda s: base64.b32encode(s.encode('utf-8')).decode('utf-8')
+            inverse_transformation = lambda s: base64.b32decode(s.encode('utf-8')).decode('utf-8')
+        elif self.base_number == 64:
+            self.name = "Base64 encoding"
+            self.instruction = "Encode the string using Base64 encoding."
+            transformation = lambda s: base64.b64encode(s.encode('utf-8')).decode('utf-8')
+            inverse_transformation = lambda s: base64.b64decode(s.encode('utf-8')).decode('utf-8')
+        elif self.base_number == 85:
+            self.name = "Base85 encoding"
+            self.instruction = "Encode the string using Base85 encoding."
+            transformation = lambda s: base64.b85encode(s.encode('utf-8')).decode('utf-8')
+            inverse_transformation = lambda s: base64.b85decode(s.encode('utf-8')).decode('utf-8')
+        elif self.base_number == 58:
+            self.name = "Base58 encoding"
+            self.instruction = "Encode the string using Base58 encoding."
+            transformation = lambda s: base58.b58encode(s.encode('utf-8')).decode('utf-8')
+            inverse_transformation = lambda s: base58.b58decode(s.encode('utf-8')).decode('utf-8')
+        else:
+            raise ValueError(f"Unsupported base number: {self.base_number}")
 
         self._f = transformation
         self._inverse = inverse_transformation
-
-@dataclass
-class Base32(StringTransformation):
-    name = "Base32 encoding"
-    instruction = "Encode the string using Base32 encoding."
-
-    def __post_init__(self):
-        def transformation(s):
-            encoded_bytes = base64.b32encode(s.encode('utf-8'))
-            return encoded_bytes.decode('utf-8')
-        
-        def inverse_transformation(s):
-            decoded_bytes = base64.b32decode(s.encode('utf-8'))
-            return decoded_bytes.decode('utf-8')
-
-        self._f = transformation
-        self._inverse = inverse_transformation
-
-@dataclass
-class Base64(StringTransformation):
-    name = "Base64 encoding"
-    instruction = "Encode the string using Base64 encoding."
-
-    def __post_init__(self):
-        def transformation(s):
-            encoded_bytes = base64.b64encode(s.encode('utf-8'))
-            return encoded_bytes.decode('utf-8')
-        
-        def inverse_transformation(s):
-            decoded_bytes = base64.b64decode(s.encode('utf-8'))
-            return decoded_bytes.decode('utf-8')
-
-        self._f = transformation
-        self._inverse = inverse_transformation
-
-@dataclass
-class Base85(StringTransformation):
-    name = "Base85 encoding"
-    instruction = "Encode the string using Base85 encoding."
-
-    def __post_init__(self):
-        def transformation(s):
-            encoded_bytes = base64.b85encode(s.encode('utf-8'))
-            return encoded_bytes.decode('utf-8')
-        
-        def inverse_transformation(s):
-            decoded_bytes = base64.b85decode(s.encode('utf-8'))
-            return decoded_bytes.decode('utf-8')
-
-        self._f = transformation
-        self._inverse = inverse_transformation
-
-@dataclass
-class Base58(StringTransformation):
-    name = "Base58 encoding"
-    instruction = "Encode the string using Base58 encoding."
-
-    def __post_init__(self):
-        def transformation(s):
-            encoded_bytes = base58.b58encode(s.encode('utf-8'))
-            return encoded_bytes.decode('utf-8')
-        
-        def inverse_transformation(s):
-            decoded_bytes = base58.b58decode(s.encode('utf-8'))
-            return decoded_bytes.decode('utf-8')
-
-        self._f = transformation
-        self._inverse = inverse_transformation
+    
+    @classmethod
+    def construct(cls):
+        random_base_number = random.choice(BASE_N_OPTIONS)
+        return cls(base_number=random_base_number)
 
 @dataclass
 class Binary(StringTransformation):
@@ -347,9 +310,9 @@ class AlternatingCase(StringTransformation):
 @dataclass
 class PythonMarkdown(StringTransformation):
     # WARNING: relies on how the given model interprets Python markdown; possibly need per-model casework
+    model_type: InitVar[type]
     name = "Python markdown"
     instruction = "Change the string to be in Python in a markdown format."
-    model_type: InitVar[type] = GPTFamily
 
     def __post_init__(self, model_type):
         if issubclass(model_type, GPTFamily):
@@ -371,6 +334,10 @@ class PythonMarkdown(StringTransformation):
             self._inverse = inverse_transformation
         else:
             raise NotImplementedError
+    
+    @classmethod
+    def construct(cls, model_type=GPTFamily):
+        return cls(model_type=model_type)
 
 @dataclass
 class JSON_Encapsulation(StringTransformation):
@@ -415,8 +382,8 @@ class TokenizerAwareTransformation(StringTransformation):
     """
     Specifies transformations which explicitly use the tokenizer of a given language model.
     """
-    openai_model_name: InitVar[str | None] = None
-    open_source_model_name: InitVar[str | None] = None
+    openai_model_name: InitVar[str | None]
+    open_source_model_name: InitVar[str | None]
 
     def __post_init__(self):
         super().__post_init__()
@@ -450,6 +417,10 @@ class TokenizerAwareReversal(TokenizerAwareTransformation):
             self._f = transformation
             self._inverse = transformation
         super().__post_init__()
+    
+    @classmethod
+    def construct(cls, openai_model_name=None, open_source_model_name=None):
+        return cls(openai_model_name=openai_model_name, open_source_model_name=open_source_model_name)
 
 
 @dataclass
@@ -468,6 +439,7 @@ class LanguageTranslation(NonDeterministicTransformation):
     """
     language: str = field(default="Chinese")
     name = "language translation"
+    instruction: str = field(init=False)
 
     def __post_init__(self):
         self.instruction = f"Translate the string from English to {self.language}."
@@ -487,15 +459,23 @@ class LanguageTranslation(NonDeterministicTransformation):
             res = self._translator.inference(self._translation_back_task + s, **just_one_output)[0]
             return res
         self._inverse = inverse_transformation
+    
+    @classmethod
+    def construct(cls):
+        random_language = random.choice(LANGUAGE_TRANSLATION_OPTIONS)
+        return cls(language=random_language)
+    
+    def __str__(self):
+        return self.language + " " + "translation"
 
 
-TRANSFORMATIONS_BY_NAME = {
-    transformation.name: transformation
-    for transformation in (Id, Reversal, TokenizerAwareReversal, LanguageTranslation, WordLevelReversal, CaesarCipher, ROT13Cipher, AtbashCipher, Base16, Base32, Base64, Base85, Base58, Binary, Leetspeak, MorseCode, VowelRepetition, AlternatingCase, PythonMarkdown, JSON_Encapsulation)
-}
+ALL_TRANSFORMATIONS = [Id, Reversal, TokenizerAwareReversal, LanguageTranslation, WordLevelReversal, CaesarCipher, ROT13Cipher, AtbashCipher, BaseN, Binary, Leetspeak, MorseCode, VowelRepetition, AlternatingCase, PythonMarkdown, JSON_Encapsulation]
 
+BASE_N_OPTIONS = [16, 32, 64, 85, 58]
 
-ICL_EXAMPLARS = [
+LANGUAGE_TRANSLATION_OPTIONS = ["Spanish", "German", "Turkish", "Indonesian", "Swahili"]
+
+ALL_ICL_EXAMPLARS = [
     (
         "How does artificial intelligence work?",
         "Artificial intelligence (AI) operates by analyzing large sets of data, recognizing patterns, and making decisions based on that analysis. It combines algorithms in machine learning, neural networks, and sometimes natural language processing, to mimic human cognition. AI systems learn from data inputs and improve over time, enabling them to perform tasks ranging from simple classification to complex problem-solving."

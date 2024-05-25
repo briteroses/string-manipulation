@@ -9,7 +9,6 @@ from models.open_source_model import OpenSourceModel
 
 def product_dict(**kwargs):
     nonempty_kwargs = {k: v for k, v in kwargs.items() if not (type(v) is list and len(v) == 0)}
-    print(nonempty_kwargs)
     keys = nonempty_kwargs.keys()
     for instance in product(*nonempty_kwargs.values()):
         yield dict(zip(keys, instance))

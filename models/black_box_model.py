@@ -48,7 +48,14 @@ class GPTFamily(BlackBoxModel):
         if not hasattr(self, "scale_ranking"):
             raise ValueError("Must have field 'scale_ranking', with an int denoting relative strengths of different GPT family models (since GPT training flops aren't known)")
         assert isinstance(self.scale_ranking, int)
-        self._encoding = tiktoken.encoding_for_model(self.name)
+        if self.name == "gpt-4o":
+            class GPT4oEncoding:
+                @property
+                def name(self):
+                    return np.nan
+            self._encoding = GPT4oEncoding() # workaround cause they didn't add gpt-4o to tiktoken yet...
+        else:
+            self._encoding = tiktoken.encoding_for_model(self.name)
         super().__post_init__()
     
     @property
@@ -133,25 +140,32 @@ class GPTFamily(BlackBoxModel):
         raise NotImplementedError
 
 @dataclass
+class GPT4o(GPTFamily):
+    name = "gpt-4o"
+    description = "Newest model in OpenAI GPT API model family. Has native multimodal capabilities."
+    scale = None
+    scale_ranking = 1
+
+@dataclass
 class GPT4(GPTFamily):
     name = "gpt-4"
     description = "Strongest model in OpenAI GPT API model family."
     scale = None
-    scale_ranking = 1
+    scale_ranking = 2
 
 @dataclass
 class GPT4_Turbo(GPTFamily):
     name = "gpt-4-turbo-preview"
     description = "Lighter variant of strongest model in OpenAI GPT API model family."
     scale = None
-    scale_ranking = 2
+    scale_ranking = 3
 
 @dataclass
 class GPT3pt5_Turbo(GPTFamily):
     name = "gpt-3.5-turbo"
     description = "Medium chat model in OpenAI GPT API model family."
     scale = None
-    scale_ranking = 3
+    scale_ranking = 4
 
 
 @dataclass
