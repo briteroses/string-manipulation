@@ -1,4 +1,5 @@
 from dataclasses import InitVar, dataclass, field
+from datetime import datetime
 from itertools import chain
 import json
 import os
@@ -8,6 +9,7 @@ import random
 from string import Template
 from tqdm import tqdm
 from typing import List, Tuple
+import wandb
 
 from experiments.base_experiment import BaseExperiment
 from judging.llama_guard_judge import LlamaGuardJudge
@@ -127,6 +129,17 @@ class CompositionExperiment(BaseExperiment):
     description = "Experiment testing composition of string transformations as a jailbreak."
 
     def __post_init__(self):
+        if bool(os.environ.get("WANDB_API_KEY")):
+            exp_time = datetime.now().strftime('%m/%d/%Y-%H:%M:%S')
+            wandb.init(
+                project="string-transformation",
+                entity="crtsn",
+                config={
+                    "target_model": self.target_model.name,
+                    "hparam_grid": self.hyperparameter_grid,
+                },
+                name=f"{exp_time}-string-transformation",
+            )
         for param_name in self.all_parameters:
             assert hasattr(self, param_name) or param_name in self.hyperparameter_grid
         super().__post_init__()
@@ -203,6 +216,15 @@ class CompositionExperiment(BaseExperiment):
 
         judging_results = self.judge(**hyperparam_setting)
 
+        if bool(os.environ.get("WANDB_API_KEY")):
+            wandb.log(
+                {
+                    "experiment_settings": experiment_header,
+                    "raw_data": raw_experiment_data,
+                    "judging_results": judging_results,
+                }
+            )
+
         return raw_experiment_data, judging_results
 
     def judge(self, **hyperparam_setting):
@@ -253,7 +275,7 @@ class CompositionExperiment(BaseExperiment):
                 transform = transform_class.construct(open_source_model_name=self.target_model.name)
         elif issubclass(transform_class, PythonMarkdown):
             transform = transform_class.construct(model_type=self.target_model.__class__)
-        elif issubclass(transform_class, LanguageTranslation) and maybe_other:
+        elif issubclass(transform_class, LanguageTranslation) and maybe_other: #TODO temporarily hardcoding a special case
             transform = transform_class.construct(choice="Spanish")
         else:
             transform = transform_class.construct()

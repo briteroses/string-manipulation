@@ -86,13 +86,16 @@ cheap_image = (
         "torch",
         "tqdm",
         "transformers",
+        "wandb",
         "vllm",
     )
 )
 
-app = modal.App("gbda")
+app = modal.App("string-transformation")
 
-vol = modal.Volume.from_name("jailbreak-experiment-data", create_if_missing=True)
+vol = modal.Volume.from_name("string-transformation-data", create_if_missing=True)
+
+config_mounts = [modal.Mount.from_local_dir(Path(__file__).resolve().parents[1] / "configs", remote_path="/root/configs")]
 
 # @app.function(
 #     image=llm_inference_image,
@@ -107,7 +110,8 @@ vol = modal.Volume.from_name("jailbreak-experiment-data", create_if_missing=True
 
 @app.function(
     image=cheap_image,
-    secrets=[modal.Secret.from_name("OPENAI_API_KEY"), modal.Secret.from_name("ANTHROPIC_API_KEY")],
+    secrets=[modal.Secret.from_name("OPENAI_API_KEY"), modal.Secret.from_name("ANTHROPIC_API_KEY"), modal.Secret.from_name("WANDB_API_KEY")],
+    mounts=config_mounts,
     volumes={"/data": vol},
     _allow_background_volume_commits=True,
     timeout=86400, # seconds in 1 day, the maximum allowed time

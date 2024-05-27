@@ -1,7 +1,6 @@
 import numpy as np
 import pickle
 import tiktoken
-from openlogprobs import extract_logprobs, OpenAIModel
 
 from pathlib import Path
 dir_of_this = Path(__file__).parent.absolute()

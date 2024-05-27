@@ -14,7 +14,6 @@ import google.generativeai as gemini
 from openai import OpenAI
 from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.completion import Completion as LegacyCompletion
-from openlogprobs import extract_logprobs, OpenAIModel as OpenLogProbsOpenAIModel
 import tiktoken
 
 CFG_PATH = Path(__file__).resolve().parents[1] / "configs/model_params.yaml"
@@ -250,7 +249,6 @@ class GeminiFamily(BlackBoxModel):
         return response.text
 
     def get_output_logits(self, prompt: str, **optional_params):
-        # no openlogprobs because no logit bias
         raise NotImplementedError
     
     def token_from_index(self, index: int):
@@ -307,7 +305,6 @@ class CohereFamily(BlackBoxModel):
         return continuations
     
     def get_output_logits(self, prompt: str, **optional_params):
-        #TODO cohere.generate has a logit bias, so could add this to openlogprobs
         raise NotImplementedError
     
     def token_from_index(self, index: int):

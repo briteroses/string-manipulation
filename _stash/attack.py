@@ -3,7 +3,6 @@ import pickle
 import numpy as np
 import random
 import tiktoken
-from openlogprobs import extract_logprobs
 from openai import OpenAI
 
 from pathlib import Path

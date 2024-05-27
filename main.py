@@ -1,3 +1,5 @@
+import os
+import wandb
 import yaml
 from pathlib import Path
 from experiments.composition import CompositionExperiment
@@ -37,7 +39,9 @@ def run():
         hyperparameter_grid=hyperparameter_grid,
     )
     composition_experiment.run_hyperparameter_grid()
+    if bool(os.environ.get("WANDB_API_KEY")):
+        wandb.finish()
 
 @app.local_entrypoint()
 def main():
-    cheap_modal_wrap_experiment.local(run)
+    cheap_modal_wrap_experiment.remote(run)
