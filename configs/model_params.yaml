@@ -1,7 +1,7 @@
 # NOTE: attack success rate correlates to the max tokens allowed in completion
 # (this was found in HarmBench from Dan Hendrycks' team)
 # so for fairness in experiments, try to use the same max tokens across all models
-max_tokens: &MAXTOK 300
+max_tokens: &MAXTOK 256
 
 openai:
   inference_api:

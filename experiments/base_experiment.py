@@ -56,6 +56,11 @@ class BaseExperiment(ABC):
         torch.cuda.empty_cache()
 
     def data_path(self, **runtime_params):
+        raw_pathname = self._raw_data_path(**runtime_params)
+        pathname = hashlib.sha256(raw_pathname.encode()).hexdigest()
+        return pathname[:48]
+    
+    def _raw_data_path(self, **runtime_params):
         def populate_data_path(param):
             if param in runtime_params:
                 value = runtime_params[param]
@@ -68,6 +73,5 @@ class BaseExperiment(ABC):
         }
         # the raw path can be arbitrarily long and then lead to OsError filename too long
         # so we just use a slice of the sha256 hash
-        raw_pathname = "_".join([f"{k}_{v}" for k, v in sorted(all_parameters_dict.items())])
-        pathname = hashlib.sha256(raw_pathname.encode()).hexdigest()
-        return pathname[:32]
+        raw_pathname = "__".join([f"{k}_{v}" for k, v in sorted(all_parameters_dict.items())])
+        return raw_pathname

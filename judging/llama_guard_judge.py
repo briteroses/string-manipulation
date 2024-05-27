@@ -78,9 +78,17 @@ class LlamaGuardJudge(Judge):
         
         return score, report
     
-    def batch_judge(self, prompt: str, outputs: List[str]) -> Tuple[float, Dict[str, float]]:
+    def batch_judge(self, prompt_s: List[str] | str, outputs: List[str]) -> Tuple[float, Dict[str, float]]:
+        """
+        Can judge multiple continuations on one prompt, or just multiple (prompt, continuation) pairs at once.
+        Respectively, for each outcome, pass in a single prompt or a list of prompts, respectively.
+        """
+        if isinstance(prompt_s, List):
+            assert len(prompt_s) == len(outputs)
+        elif isinstance(prompt_s, str):
+            prompt_s = [prompt_s] * len(outputs)
         total_score, total_report_freqs = 0, {}
-        for output in outputs:
+        for prompt, output in zip(prompt_s, outputs):
             attack_score, attack_report = self(prompt, output)
             total_score += attack_score
             if isinstance(attack_report, str):

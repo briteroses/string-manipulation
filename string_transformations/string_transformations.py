@@ -18,6 +18,7 @@ String transformations to implement:
     JSON
 """
 
+from copy import copy
 import random
 import base58
 import base64
@@ -116,7 +117,7 @@ def caesar_cipher_transformation(s, cipher_step):
     encoded = ""
     QUICK_FIND_ALPHABET = {ALPHABET[i]: i for i in range(len(ALPHABET))}
     for char in s:
-        if not char.isalpha():
+        if char not in ALPHABET:
             encoded += char
             continue
         was_upper = char.isupper()
@@ -154,7 +155,7 @@ class AtbashCipher(StringTransformation):
         def transformation(s):
             encoded = ""
             for char in s:
-                if not char.isalpha():
+                if char not in ALPHABET:
                     encoded += char
                     continue
                 was_upper = char.isupper()
@@ -207,9 +208,11 @@ class BaseN(StringTransformation):
         self._inverse = inverse_transformation
     
     @classmethod
-    def construct(cls):
-        random_base_number = random.choice(BASE_N_OPTIONS)
-        return cls(base_number=random_base_number)
+    def construct(cls, choice=None):
+        if choice is None:
+            random_base_number = random.choice(BASE_N_OPTIONS)
+            return cls(base_number=random_base_number)
+        return cls(base_number=choice)
 
 @dataclass
 class Binary(StringTransformation):
@@ -461,51 +464,67 @@ class LanguageTranslation(NonDeterministicTransformation):
         self._inverse = inverse_transformation
     
     @classmethod
-    def construct(cls):
-        random_language = random.choice(LANGUAGE_TRANSLATION_OPTIONS)
-        return cls(language=random_language)
+    def construct(cls, choice=None):
+        if choice is None:
+            random_language = random.choice(LANGUAGE_TRANSLATION_OPTIONS)
+            return cls(language=random_language)
+        return cls(language=choice)
     
     def __str__(self):
         return self.language + " " + "translation"
 
+ALL_TRANSFORMATIONS = [Reversal, TokenizerAwareReversal, LanguageTranslation, WordLevelReversal, CaesarCipher, ROT13Cipher, AtbashCipher, BaseN, Binary, Leetspeak, MorseCode, VowelRepetition, AlternatingCase, PythonMarkdown, JSON_Encapsulation]
 
-ALL_TRANSFORMATIONS = [Id, Reversal, TokenizerAwareReversal, LanguageTranslation, WordLevelReversal, CaesarCipher, ROT13Cipher, AtbashCipher, BaseN, Binary, Leetspeak, MorseCode, VowelRepetition, AlternatingCase, PythonMarkdown, JSON_Encapsulation]
+# NOTE
+# The style transformations, Python markdown and json encapsulation, only make sense as the outermost transformation in a composition
+# Morse code, BaseN, binary change the string from alphabetical -> numeral chars, so they need to be after all "main" compositions (but can still be before style transformations)
+# Language translation only works on intact English text, so can only be used once and as the innermost transformation in a composition
+_transformation_priorities = {
+    LanguageTranslation: -1,
+    Reversal: 0,
+    TokenizerAwareReversal: 0,
+    WordLevelReversal: 0,
+    CaesarCipher: 0,
+    ROT13Cipher: 0,
+    AtbashCipher: 0,
+    Leetspeak: 0,
+    VowelRepetition: 0,
+    AlternatingCase: 0,
+    MorseCode: 1,
+    Binary: 1,
+    BaseN: 1,
+    PythonMarkdown: 2,
+    JSON_Encapsulation: 2,
+}
+_REVERSALS = (Reversal, TokenizerAwareReversal, WordLevelReversal)
+_CIPHERS = (CaesarCipher, ROT13Cipher, AtbashCipher)
+_STYLES = (PythonMarkdown, JSON_Encapsulation)
+def sample_transformations(k: int):
+    """
+    Call this instead of `random.sample(ALL_TRANSFORMATIONS, k)`.
+    """
+    # There are a ton of rules around what compositions are valid or not, so we'll have to hardcode these a lot.
+    # Basically, we want to follow the priorities as above, and we don't want to sample multiple of the same "type".
+    t_choice = random.choice(ALL_TRANSFORMATIONS)
+    remaining_transformations = copy(ALL_TRANSFORMATIONS)
+    ret = [t_choice, ]
+    k -= 1
+    
+    while k > 0:
+        remaining_transformations = [t for t in remaining_transformations if not issubclass(t, t_choice)]
+        for transformation_group in (_REVERSALS, _CIPHERS, _STYLES):
+            if issubclass(t_choice, transformation_group):
+                remaining_transformations = [t for t in remaining_transformations if not issubclass(t, transformation_group)]
+        if len(remaining_transformations) == 0:
+            raise ValueError("Ran out of transformations to sample. Your `k` is probably too high...")
+        t_choice = random.choice(remaining_transformations)
+        ret.append(t_choice)
+        k -= 1
+    ret = sorted(ret, key = lambda t: _transformation_priorities[t])
+
+    return ret
 
 BASE_N_OPTIONS = [16, 32, 64, 85, 58]
 
+# These language defaults should reflect cultural + geographic diversity while all using the English alphabet (mostly).
 LANGUAGE_TRANSLATION_OPTIONS = ["Spanish", "German", "Turkish", "Indonesian", "Swahili"]
-
-ALL_ICL_EXAMPLARS = [
-    (
-        "How does artificial intelligence work?",
-        "Artificial intelligence (AI) operates by analyzing large sets of data, recognizing patterns, and making decisions based on that analysis. It combines algorithms in machine learning, neural networks, and sometimes natural language processing, to mimic human cognition. AI systems learn from data inputs and improve over time, enabling them to perform tasks ranging from simple classification to complex problem-solving."
-    ),
-    (
-        "Can you explain how photosynthesis works?",
-        "Photosynthesis is the process by which green plants, algae, and certain bacteria convert light energy, usually from the sun, into chemical energy stored in glucose, a type of sugar, using water and carbon dioxide. This occurs in two main stages: the light-dependent reactions and the Calvin cycle. In the light-dependent reactions, which take place in the thylakoid membranes of chloroplasts, sunlight is absorbed by chlorophyll, causing it to release electrons that help generate ATP and NADPH. These energy carriers then power the Calvin cycle in the stroma of the chloroplast, where carbon dioxide is fixed into glucose. Oxygen is released as a byproduct of this process, contributing to the oxygen we breathe."
-    ),
-    (
-        "How does the stock market work?",
-        "The stock market is a platform where buyers and sellers come together to trade shares of publicly listed companies. It operates through exchanges like the New York Stock Exchange or NASDAQ. Companies list their shares on an exchange through an initial public offering (IPO), allowing investors to buy and sell these shares. The price of stocks is determined by supply and demand dynamics, influenced by various factors including company performance, economic indicators, and market sentiment. Investors can make profits by buying stocks at a lower price and selling them at a higher price, or through dividends paid by the company."
-    ),
-    (
-        "Can you give me a brief summary of World War II?",
-        "World War II was a global conflict that lasted from 1939 to 1945, involving most of the world's nations. It was primarily fought between the Axis Powers (mainly Germany, Italy, and Japan) and the Allied Powers (primarily the United Kingdom, Soviet Union, and the United States). It resulted in significant loss of life and was marked by key events like the Holocaust, the bombing of Hiroshima and Nagasaki, and the eventual defeat of Nazi Germany and Imperial Japan. World War II had profound effects on the course of world history, including the emergence of the United States and the Soviet Union as superpowers and the beginning of the Cold War."
-    ),
-    (
-        "What are the benefits of regular physical exercise?",
-        "Regular physical exercise offers a multitude of benefits for both the body and mind. Physically, it helps improve cardiovascular health, reducing the risk of heart disease, stroke, and hypertension. It aids in maintaining a healthy weight, strengthening muscles and bones, and enhancing flexibility and balance, which can prevent falls and injuries. From a mental health perspective, exercise is known to release endorphins, often referred to as feel-good hormones, which can improve mood and reduce feelings of depression and anxiety. Additionally, regular physical activity can boost cognitive function, improve sleep quality, and increase lifespan. Engaging in a variety of exercises, including aerobic activities, strength training, and flexibility exercises, can maximize health benefits and prevent the monotony of a single routine."
-    ),
-    (
-        "What is the concept of 'supply and demand' in economics?",
-        "The concept of 'supply and demand' is a fundamental economic model that describes how the price and quantity of goods and services are determined in a market. Demand refers to how much (quantity) of a product or service is desired by buyers at various prices, while supply represents how much the market can offer. The price of a good or service is determined by the point at which supply and demand meet, known as the equilibrium price. When demand increases for a fixed supply, prices rise as consumers are willing to pay more to secure the item. Conversely, if supply increases for a fixed demand, prices fall as more of the product is available. This dynamic interaction between supply and demand ensures the efficient distribution of resources in a market economy, guiding the allocation of goods and services to those who value them most."
-    ),
-    (
-        "How do cyberattacks impact businesses?",
-        "Cyberattacks can have devastating impacts on businesses, ranging from financial losses to reputational damage. Financially, the direct costs include ransom payments in the case of ransomware attacks, system restoration, and data recovery expenses. There are also indirect costs, such as operational downtime, lost productivity, and legal fees associated with breaches of customer or employee data. Beyond the tangible impacts, cyberattacks can erode customer trust and loyalty, especially if sensitive personal information is compromised. This loss of trust can lead to a decline in business and may be difficult to recover from. Furthermore, businesses may face regulatory fines if found non-compliant with data protection laws. In the long term, cyberattacks can disrupt strategic plans and lead to competitive disadvantages, as resources are diverted to recovery and strengthening cybersecurity defenses instead of growth or innovation initiatives."
-    ),
-    (
-        "How do black holes form?",
-        "A black hole forms from the remnants of a massive star that has ended its life cycle. When such a star depletes its nuclear fuel, it can no longer sustain the nuclear fusion reactions that counterbalance gravitational forces. As a result, the core collapses under its own immense gravity, leading to a supernova explosion that ejects the star's outer layers into space. If the remaining core mass is sufficiently large—typically more than about 2.5 times the mass of the Sun—it collapses to a point of infinite density known as a singularity, surrounded by an event horizon. This event horizon marks the boundary beyond which nothing, not even light, can escape the black hole's gravitational pull, rendering the black hole invisible and detectable only by its gravitational effects on nearby matter and radiation."
-    )
-]
