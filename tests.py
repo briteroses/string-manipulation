@@ -1,5 +1,5 @@
 from string_transformations.string_transformations import ALL_TRANSFORMATIONS, PythonMarkdown, TokenizerAwareReversal
-from judging.llama_guard_judge import LlamaGuardJudge
+from judging.llamaguard_judge import LlamaGuardJudge
 from models.black_box_model import GPTFamily, GPT4, GPT3pt5_Turbo, GPT3pt5_Turbo_Instruct, Gemini_Pro, LegacyGPT, CohereCommandLight
 from models.model_class import LanguageModel
 from models.open_source_model import Mistral_7B_Base, Mistral_7B_Instruct

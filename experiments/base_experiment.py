@@ -43,9 +43,22 @@ class BaseExperiment(ABC):
 
         for hyperparam_setting in all_hyperparam_settings:
             self.run(**hyperparam_setting)
+        
+    def evaluate_hyperparameter_grid(self):
+        productable_hyperparams = {
+            k: v if type(v) == list else [v, ] for k, v in self.hyperparameter_grid.items()
+        }
+        all_hyperparam_settings = product_dict(**productable_hyperparams)
+
+        for hyperparam_setting in all_hyperparam_settings:
+            self.evaluate(**hyperparam_setting)
     
     @abstractmethod
     def run(self, **kwargs):
+        pass
+
+    @abstractmethod
+    def evaluate(self, **kwargs):
         pass
 
     def destroy(self):

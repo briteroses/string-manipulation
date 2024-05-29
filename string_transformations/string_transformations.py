@@ -498,6 +498,7 @@ _transformation_priorities = {
 }
 _REVERSALS = (Reversal, TokenizerAwareReversal, WordLevelReversal)
 _CIPHERS = (CaesarCipher, ROT13Cipher, AtbashCipher)
+_EXTENDERS = (MorseCode, Binary, BaseN)
 _STYLES = (PythonMarkdown, JSON_Encapsulation)
 def sample_transformations(k: int):
     """
@@ -512,7 +513,7 @@ def sample_transformations(k: int):
     
     while k > 0:
         remaining_transformations = [t for t in remaining_transformations if not issubclass(t, t_choice)]
-        for transformation_group in (_REVERSALS, _CIPHERS, _STYLES):
+        for transformation_group in (_REVERSALS, _CIPHERS, _STYLES, _EXTENDERS):
             if issubclass(t_choice, transformation_group):
                 remaining_transformations = [t for t in remaining_transformations if not issubclass(t, transformation_group)]
         if len(remaining_transformations) == 0:
