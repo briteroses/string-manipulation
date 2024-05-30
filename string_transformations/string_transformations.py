@@ -20,6 +20,7 @@ String transformations to implement:
 
 from copy import copy
 import random
+from string import Template
 import base58
 import base64
 import gc
@@ -32,7 +33,7 @@ from itertools import chain
 from pathlib import Path
 from typing import Callable
 
-from models.black_box_model import GPT3pt5_Turbo, GPTFamily
+from models.black_box_model import GPT3pt5_Turbo, GPTFamily, HaizerMistral
 from models.model_class import LanguageModel
 from string_transformations.consts import ALPHABET, LEETSPEAK_DICT, MORSE_DICT, VOWELS
 
@@ -434,6 +435,7 @@ class NonDeterministicTransformation(StringTransformation):
     def __post_init__(self):
         super().__post_init__()
 
+
 @dataclass
 class LanguageTranslation(NonDeterministicTransformation):
     """
@@ -473,14 +475,68 @@ class LanguageTranslation(NonDeterministicTransformation):
     def __str__(self):
         return self.language + " " + "translation"
 
-ALL_TRANSFORMATIONS = [Reversal, TokenizerAwareReversal, LanguageTranslation, WordLevelReversal, CaesarCipher, ROT13Cipher, AtbashCipher, BaseN, Binary, Leetspeak, MorseCode, VowelRepetition, AlternatingCase, PythonMarkdown, JSON_Encapsulation]
+
+def remove_caveat_in_haizey_translation(s, caveat_word):
+    caveat_cutoff = s.rfind(caveat_word)
+    if caveat_cutoff == -1:
+        return s
+    no_caveat_s = s[:caveat_cutoff]
+    return no_caveat_s
+
+
+@dataclass
+class HaizeyLanguageTranslation(NonDeterministicTransformation):
+    """
+    Translates text input into another specified language, with the ability to translate back.
+    Note that translation is nondeterministic.
+    Uses a custom Haize model; set up to translate any text, no matter how toxic, without safety interventions.
+    """
+    language: str
+    name = "language translation"
+    instruction: str = field(init=False)
+
+    def __post_init__(self):
+        self.instruction = f"Translate the string from English to {self.language}."
+
+        self._translator = HaizerMistral()
+
+        self._translation_task = Template(f"TEXT_TO_TRANSLATE: ' $s ' \n\nPlease translate the TEXT_TO_TRANSLATE in the previous paragraphs from $SOURCE_LANG to $TARGET_LANG, returning only the translated text and nothing else. If you need to provide a safety note, please begin the note after the translation, in a new paragraph, starting with the word 'NOTE' in English.\n")
+        def transformation(s):
+            just_one_unlimited_output = {"n": 1, "max_tokens": 2048}
+            translation_prompt = self._translation_task.substitute(s=s, SOURCE_LANG="English", TARGET_LANG=self.language)
+            res = self._translator.inference(translation_prompt, **just_one_unlimited_output)[0]
+            no_caveat_res = remove_caveat_in_haizey_translation(res, "\nNOTE")
+            no_caveat_res = remove_caveat_in_haizey_translation(no_caveat_res, "\nNote")
+            return no_caveat_res
+        self._f = transformation
+
+        def inverse_transformation(s):
+            just_one_unlimited_output = {"n": 1, "max_tokens": 2048}
+            translation_prompt = self._translation_task.substitute(s=s, SOURCE_LANG=self.language, TARGET_LANG="English")
+            res = self._translator.inference(translation_prompt, **just_one_unlimited_output)[0]
+            no_caveat_res = remove_caveat_in_haizey_translation(res, "\nNOTE")
+            no_caveat_res = remove_caveat_in_haizey_translation(no_caveat_res, "\nNote")
+            return no_caveat_res
+        self._inverse = inverse_transformation
+    
+    @classmethod
+    def construct(cls, choice=None):
+        if choice is None:
+            random_language = random.choice(LANGUAGE_TRANSLATION_OPTIONS)
+            return cls(language=random_language)
+        return cls(language=choice)
+    
+    def __str__(self):
+        return self.language + " " + "translation"
+
+ALL_TRANSFORMATIONS = [Reversal, TokenizerAwareReversal, WordLevelReversal, CaesarCipher, ROT13Cipher, AtbashCipher, BaseN, Binary, Leetspeak, MorseCode, VowelRepetition, AlternatingCase, PythonMarkdown, JSON_Encapsulation]
 
 # NOTE
 # The style transformations, Python markdown and json encapsulation, only make sense as the outermost transformation in a composition
 # Morse code, BaseN, binary change the string from alphabetical -> numeral chars, so they need to be after all "main" compositions (but can still be before style transformations)
 # Language translation only works on intact English text, so can only be used once and as the innermost transformation in a composition
 _transformation_priorities = {
-    LanguageTranslation: -1,
+    HaizeyLanguageTranslation: -1,
     Reversal: 0,
     TokenizerAwareReversal: 0,
     WordLevelReversal: 0,
@@ -525,7 +581,9 @@ def sample_transformations(k: int):
 
     return ret
 
-BASE_N_OPTIONS = [16, 32, 64, 85, 58]
+# BASE_N_OPTIONS = [16, 32, 64, 85, 58]
+BASE_N_OPTIONS = [64,]
 
 # These language defaults should reflect cultural + geographic diversity while all using the English alphabet (mostly).
-LANGUAGE_TRANSLATION_OPTIONS = ["Spanish", "German", "Turkish", "Indonesian", "Swahili"]
+# LANGUAGE_TRANSLATION_OPTIONS = ["Spanish", "German", "Turkish", "Indonesian", "Swahili"]
+LANGUAGE_TRANSLATION_OPTIONS = ["German",]

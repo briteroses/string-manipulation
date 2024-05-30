@@ -1,10 +1,10 @@
-from dataclasses import dataclass
+from dataclasses import InitVar, dataclass
 from itertools import chain
 import numpy as np
 import os
 from pathlib import Path
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 import yaml
 
 from models.model_class import LanguageModel
@@ -40,25 +40,27 @@ class GPTFamily(BlackBoxModel):
     Denotes any OpenAI model.
     """
     system_prompt = CFG["openai"]["system_prompt"]
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     max_api_retries = CFG["openai"]["max_api_retries"]
+    _base_url = None
 
     def __post_init__(self):
         if not hasattr(self, "scale_ranking"):
             raise ValueError("Must have field 'scale_ranking', with an int denoting relative strengths of different GPT family models (since GPT training flops aren't known)")
         assert isinstance(self.scale_ranking, int)
-        if self.name == "gpt-4o":
-            class GPT4oEncoding:
-                @property
-                def name(self):
-                    return np.nan
-            self._encoding = GPT4oEncoding() # workaround cause they didn't add gpt-4o to tiktoken yet...
+        if self._base_url is None:
+            self.client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        else:
+            self.client = OpenAI(base_url=self._base_url, api_key=os.environ["OPENAI_API_KEY"])
+        if self.name == "mistralai/Mistral-7B-Instruct-v0.2":
+            self._encoding = None
         else:
             self._encoding = tiktoken.encoding_for_model(self.name)
         super().__post_init__()
     
     @property
     def vocabulary(self):
+        if self._encoding is None:
+            return np.nan
         return self._encoding.name #placeholder, what we really want is the full token list...
 
     def inference(self, prompt: str | List[Dict], **optional_params):
@@ -77,10 +79,15 @@ class GPTFamily(BlackBoxModel):
                 }
                 
                 if isinstance(prompt, str):
-                    messages = [
-                        {"role": "system", "content": self.system_prompt},
-                        {"role": "user", "content": prompt},
-                    ]
+                    if "Mistral" in self.name:
+                        messages = [
+                            {"role": "user", "content": prompt},
+                        ]
+                    else:
+                        messages = [
+                            {"role": "system", "content": self.system_prompt},
+                            {"role": "user", "content": prompt},
+                        ]
                 elif isinstance(prompt, List):
                     messages = prompt
 
@@ -165,6 +172,14 @@ class GPT3pt5_Turbo(GPTFamily):
     description = "Medium chat model in OpenAI GPT API model family."
     scale = None
     scale_ranking = 4
+
+@dataclass
+class HaizerMistral(GPTFamily):
+    name = "mistralai/Mistral-7B-Instruct-v0.2"
+    description = "Our custom Mistral"
+    scale = None
+    scale_ranking = 5
+    _base_url = "https://mistral.haizelabs.com/v1"
 
 
 @dataclass

@@ -35,23 +35,27 @@ class BaseExperiment(ABC):
         assert type(self.hyperparameter_grid) == dict
         assert type(self.all_parameters) == list
     
-    def run_hyperparameter_grid(self):
+    def run_hyperparameter_grid(self, config=None):
+        if config == None:
+            config = {}
         productable_hyperparams = {
             k: v if type(v) == list else [v, ] for k, v in self.hyperparameter_grid.items()
         }
         all_hyperparam_settings = product_dict(**productable_hyperparams)
 
         for hyperparam_setting in all_hyperparam_settings:
-            self.run(**hyperparam_setting)
+            self.run(hyperparam_setting, config)
         
-    def evaluate_hyperparameter_grid(self):
+    def evaluate_hyperparameter_grid(self, config=None):
+        if config == None:
+            config = {}
         productable_hyperparams = {
             k: v if type(v) == list else [v, ] for k, v in self.hyperparameter_grid.items()
         }
         all_hyperparam_settings = product_dict(**productable_hyperparams)
 
         for hyperparam_setting in all_hyperparam_settings:
-            self.evaluate(**hyperparam_setting)
+            self.evaluate(hyperparam_setting, config)
     
     @abstractmethod
     def run(self, **kwargs):

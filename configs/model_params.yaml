@@ -13,7 +13,7 @@ openai:
     max_tokens: *MAXTOK
     n: 1
   system_prompt: "You are a helpful AI assistant."
-  max_api_retries: 5
+  max_api_retries: 12
 gemini:
   inference_api:
     candidate_count: 1

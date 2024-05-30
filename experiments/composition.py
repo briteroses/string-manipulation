@@ -3,28 +3,35 @@ from dataclasses import InitVar, dataclass, field
 from datetime import datetime
 from itertools import chain
 import json
+from judging.harmbench import HarmBenchJudge
+import modal
 import os
 import pandas as pd
 from pathlib import Path
 import random
 from string import Template
-from judging.harmbench import HarmBenchJudge
 import torch
 from tqdm import tqdm
 from typing import List, Tuple
 import wandb
 
 from experiments.base_experiment import BaseExperiment
+# from judging.harmbench import HarmBenchJudge
 from judging.llamaguard_judge import LlamaGuardJudge
-from models.black_box_model import BlackBoxModel, GPT3pt5_Turbo, GPTFamily
+from models.black_box_model import GPT4, BlackBoxModel, GPT3pt5_Turbo, GPTFamily, HaizerMistral
 from models.model_class import LanguageModel
 from models.open_source_model import OpenSourceModel
 
-from string_transformations.string_transformations import ALL_TRANSFORMATIONS, BaseN, Id, LanguageTranslation, Leetspeak, MorseCode, PythonMarkdown, StringTransformation, TokenizerAwareTransformation, sample_transformations
+from string_transformations.string_transformations import ALL_TRANSFORMATIONS, BaseN, Id, HaizeyLanguageTranslation, Leetspeak, MorseCode, PythonMarkdown, StringTransformation, TokenizerAwareTransformation, sample_transformations
 from utils.utils import ALL_ICL_EXEMPLARS, get_greedy_one_command
 
 PARENT_PATH = Path(__file__).resolve().parents[0]
-EXPERIMENT_DATA_FOLDER = PARENT_PATH / "experiment_data"
+if modal.is_local():
+    MOUNT_PATH = PARENT_PATH
+else:
+    MOUNT_PATH = Path("/data")
+
+EXPERIMENT_DATA_FOLDER = MOUNT_PATH / "experiment_data"
 
 class CompositionPrompts:
     @staticmethod
@@ -100,7 +107,7 @@ def composition_default_hparams():
     return {
         "k_num_transforms": [1, 2, 3, 4],
         "maybe_transformation_instructions": [True, False],
-        "other_transform": [Id, LanguageTranslation, BaseN, Leetspeak, MorseCode],
+        "other_transform": [Id, HaizeyLanguageTranslation, BaseN, Leetspeak, MorseCode],
         "composition_target": ["query", "response"],
     }
 
@@ -153,15 +160,33 @@ class CompositionExperiment(BaseExperiment):
             assert hasattr(self, param_name) or param_name in self.hyperparameter_grid
         super().__post_init__()
 
-    def run(self, **hyperparam_setting):
-        data_path = self.data_save_path(**hyperparam_setting)
-        if os.path.exists(data_path):
-            print(f"Data already exists for hyperparameter setting: {hyperparam_setting}")
-            print(f"Skipping this run. Delete the file at {data_path} if you want to re-run.")
-            return
+    def run(self, hyperparam_setting, config):
+        k = hyperparam_setting["k_num_transforms"]
+        num_attack_trials = 14 if k == 1 else self.num_attack_trials #TODO hardcoded!!
 
         other_transform = self._construct_transform(hyperparam_setting["other_transform"], maybe_other=True)
         hyperparam_setting["other_transform"] = other_transform
+
+        print(hyperparam_setting)
+
+        data_load_path = self.data_save_path(**hyperparam_setting)
+        if os.path.exists(data_load_path):
+            with open(data_load_path, 'r') as fin:
+                raw_experiment_data = json.load(fin)
+                progress_num_trials = sum(k != "HEADER" for k in raw_experiment_data)
+                if progress_num_trials >= num_attack_trials:
+                    print(f"Run already finished for this hyperparameter setting.")
+                    print(f"Skipping this run. Delete the file at {data_load_path} if you want to re-run.")
+                    print("Starting judging...")
+                    self.evaluate(hyperparam_setting, config)
+                    return
+                else:
+                    print(f"{progress_num_trials} of {num_attack_trials} trials already finished for this hyperparameter setting.")
+        else:
+            raw_experiment_data = {}
+            experiment_header = self._raw_data_path(**hyperparam_setting)
+            raw_experiment_data["HEADER"] = experiment_header
+            progress_num_trials = 0
 
         composition_target = hyperparam_setting["composition_target"]
         if composition_target == "query":
@@ -169,16 +194,7 @@ class CompositionExperiment(BaseExperiment):
         elif composition_target == "response":
             composition_prompt = RESPONSE_COMPOSITION_PROMPT
 
-        raw_experiment_data = {}
-        experiment_header = self._raw_data_path(**hyperparam_setting)
-        raw_experiment_data["HEADER"] = experiment_header
-
-        k = hyperparam_setting["k_num_transforms"]
-        num_attack_trials = 23 if k == 1 else self.num_attack_trials #TODO hardcoded!!
-
-        print(experiment_header)
-
-        for _ in tqdm(range(num_attack_trials), desc="attack trials"):
+        for _ in tqdm(range(progress_num_trials, num_attack_trials), desc="attack trials"):
 
             while True: # this is just `do until`
                 transform_list = []
@@ -223,6 +239,7 @@ class CompositionExperiment(BaseExperiment):
 
                 greedy_one = get_greedy_one_command(self.target_model)
                 continuation = self.target_model.inference(attack_prompt, **greedy_one)[0]
+                _raw_continuation = continuation
 
                 try:
                     if composition_target == "response":
@@ -235,6 +252,8 @@ class CompositionExperiment(BaseExperiment):
 
                 transformation_data.append(
                     {
+                        "attack_prompt": attack_prompt,
+                        "_raw_continuation": _raw_continuation,
                         "behavior": behavior,
                         "context": context,
                         "continuation": continuation,
@@ -243,91 +262,79 @@ class CompositionExperiment(BaseExperiment):
             
             raw_experiment_data[list_transformations_prompt] = transformation_data
 
-        data_save_path = self.data_save_path(**hyperparam_setting)
-        with open(data_save_path, 'w') as fout:
-            json.dump(raw_experiment_data, fout)
-
-        if bool(os.environ.get("WANDB_API_KEY")):
-            wandb.log(
-                {
-                    "experiment_settings": experiment_header,
-                    "raw_data": raw_experiment_data,
-                }
-            )
+            # save at every trial
+            data_save_path = self.data_save_path(**hyperparam_setting)
+            with open(data_save_path, 'w') as fout:
+                json.dump(raw_experiment_data, fout)
+        
+        self.evaluate(hyperparam_setting, config)
 
         return raw_experiment_data
+    
+    def evaluate_hyperparameter_grid(self, config=None):
+        raise ValueError("We customized the setup so that this is invalid now. Just use run_hyperparameter_grid and it will evaluate internally.")
 
-    def evaluate(self, val_or_eval="val", **hyperparam_setting):
-        assert torch.cuda.is_available(), "We're using harmbench evaluation and we require a GPU"
-        judge = HarmBenchJudge(val_or_eval)
-
-        load_path = self.data_save_path(**hyperparam_setting)
-        with open(load_path) as fout:
+    def evaluate(self, hyperparam_setting, config):
+        data_load_path = self.data_save_path(**hyperparam_setting)
+        with open(data_load_path) as fout:
             experiment_data = json.load(fout)
+        num_attack_trials = sum(k != "HEADER" for k in experiment_data)
 
-        judging_results = {}
-        experiment_header = self._raw_data_path(**hyperparam_setting)
-        judging_results["HEADER"] = experiment_header
+        val_or_eval_or_llamaguard = config["val_or_eval_or_llamaguard"]
 
-        for list_transformations_prompt, prompt_results in experiment_data.items():
+        judge_load_path = self.evaluation_save_path(val_or_eval_or_llamaguard, **hyperparam_setting)
+        if os.path.exists(judge_load_path):
+            with open(judge_load_path, 'r') as fin:
+                judging_results = json.load(fin)
+                progress_num_trials = sum(k != "HEADER" for k in judging_results)
+                if progress_num_trials >= num_attack_trials:
+                    print(f"Judging already finished for this hyperparameter setting.")
+                    print(f"Skipping this run. Delete the file at {judge_load_path} if you want to re-run.")
+                    return
+                else:
+                    print(f"{progress_num_trials} of {num_attack_trials} trials already finished for this hyperparameter setting.")
+        else:
+            judging_results = {}
+            experiment_header = self._raw_data_path(**hyperparam_setting)
+            judging_results["HEADER"] = experiment_header
+            progress_num_trials = 0
+        
+        if val_or_eval_or_llamaguard == "val" or val_or_eval_or_llamaguard == "eval":
+            assert torch.cuda.is_available(), "We're using harmbench evaluation and we require a GPU"
+            judge = HarmBenchJudge(val_or_eval_or_llamaguard)
+        
+        elif val_or_eval_or_llamaguard == "llamaguard":
+            gpt_judge_base = HaizerMistral()
+            judge = LlamaGuardJudge(gpt_judge_base, policy="llamaguard")
+
+        for list_transformations_prompt, prompt_results in tqdm(experiment_data.items(), desc="judge trial"):
             if list_transformations_prompt == "HEADER":
+                continue
+            if list_transformations_prompt in judging_results:
                 continue
             bad_prompts = [res["behavior"] for res in prompt_results]
             continuations = [res["continuation"] for res in prompt_results]
             contexts = [res["context"] for res in prompt_results]
-            asr = judge.batch_judge(bad_prompts, continuations, contexts)
-            judging_results[list_transformations_prompt] = {
-                "asr": asr,
-            }
-        
-        save_path = self.evaluation_save_path(**hyperparam_setting)
-        with open(save_path, 'w') as fout:
-            json.dump(judging_results, fout)
-        
-        if bool(os.environ.get("WANDB_API_KEY")):
-            wandb.log(
-                {
-                    "experiment_settings": experiment_header,
-                    "judging_results": judging_results,
+
+            if val_or_eval_or_llamaguard == "val" or val_or_eval_or_llamaguard == "eval":
+                asr = judge.batch_judge(bad_prompts, continuations, contexts)
+                judging_results[list_transformations_prompt] = {
+                    "asr": asr,
                 }
-            )
-        
-        return judging_results
-
-
-    def judge(self, **hyperparam_setting):
-        gpt_judge_base = GPT3pt5_Turbo()
-        judge = LlamaGuardJudge(gpt_judge_base, policy="llamaguard")
-
-        load_path = self.data_save_path(**hyperparam_setting)
-        with open(load_path) as fout:
-            experiment_data = json.load(fout)
-        
-        judging_results = {}
-        experiment_header = self._raw_data_path(**hyperparam_setting)
-        judging_results["HEADER"] = experiment_header
-
-        for list_transformations_prompt, prompt_results in experiment_data.items():
-            if list_transformations_prompt == "HEADER":
-                continue
-            bad_prompts, continuations = list(zip(*prompt_results.items()))
-            avg_attack_score, tally_attack_reports = judge.batch_judge(bad_prompts, continuations)
-            judging_results[list_transformations_prompt] = {
-                "avg_attack_score": avg_attack_score,
-                "tally_attack_reports": tally_attack_reports,
-            }
-        
-        save_path = self.evaluation_save_path(**hyperparam_setting)
-        with open(save_path, 'w') as fout:
-            json.dump(judging_results, fout)
-        
-        if bool(os.environ.get("WANDB_API_KEY")):
-            wandb.log(
-                {
-                    "experiment_settings": experiment_header,
-                    "judging_results": judging_results,
+            elif val_or_eval_or_llamaguard == "llamaguard":
+                full_prompts = [
+                    b + "\n" + "Context:" + "\n" + c if c is not None else b
+                    for (b, c) in zip(bad_prompts, contexts)
+                ]
+                asr, tally_attack_reports = judge.batch_judge(full_prompts, continuations)
+                judging_results[list_transformations_prompt] = {
+                    "asr": asr,
+                    "tally_attack_reports": tally_attack_reports,
                 }
-            )
+        
+            save_path = self.evaluation_save_path(val_or_eval_or_llamaguard, **hyperparam_setting)
+            with open(save_path, 'w') as fout:
+                json.dump(judging_results, fout)
         
         return judging_results
 
@@ -337,9 +344,9 @@ class CompositionExperiment(BaseExperiment):
         full_save_path.parent.mkdir(parents=True, exist_ok=True)
         return full_save_path
     
-    def evaluation_save_path(self, **hyperparam_setting):
+    def evaluation_save_path(self, val_or_eval_or_llamaguard, **hyperparam_setting):
         hyperparam_data_path = self.data_path(**hyperparam_setting)
-        full_save_path = EXPERIMENT_DATA_FOLDER / self.name / "judging" / f"{hyperparam_data_path}.json"
+        full_save_path = EXPERIMENT_DATA_FOLDER / self.name / f"{val_or_eval_or_llamaguard}_judging" / f"{hyperparam_data_path}.json"
         full_save_path.parent.mkdir(parents=True, exist_ok=True)
         return full_save_path
     
@@ -351,8 +358,8 @@ class CompositionExperiment(BaseExperiment):
                 transform = transform_class.construct(open_source_model_name=self.target_model.name)
         elif issubclass(transform_class, PythonMarkdown):
             transform = transform_class.construct(model_type=self.target_model.__class__)
-        elif issubclass(transform_class, LanguageTranslation) and maybe_other: #TODO temporarily hardcoding a special case
-            transform = transform_class.construct(choice="Spanish")
+        elif issubclass(transform_class, HaizeyLanguageTranslation) and maybe_other: #TODO temporarily hardcode a special case
+            transform = transform_class.construct(choice="German")
         else:
             transform = transform_class.construct()
         return transform
