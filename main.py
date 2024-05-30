@@ -1,4 +1,5 @@
 import argparse
+from dotenv import load_dotenv
 import json
 import os
 import wandb
@@ -10,6 +11,9 @@ from experiments.composition import CompositionExperiment
 from models.black_box_model import GPT4_Turbo
 from string_transformations.string_transformations import AlternatingCase, AtbashCipher, BaseN, Binary, Id, Leetspeak, LanguageTranslation, MorseCode, Reversal, VowelRepetition
 from utils.modal_utils import app, cheap_modal_wrap_experiment
+
+
+load_dotenv()
 
 
 CFG_PATH = Path(__file__).resolve().parents[0] / "configs/model_params.yaml"
