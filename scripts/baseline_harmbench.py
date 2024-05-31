@@ -1,4 +1,5 @@
-from experiments.composition import composition_default_eval_set, HarmBenchJudge
+from experiments.composition import composition_default_eval_set
+from judging.harmbench_judge import HarmBenchJudge
 
 eval_set = composition_default_eval_set()
 
