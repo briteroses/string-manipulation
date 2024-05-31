@@ -2,6 +2,7 @@ from dataclasses import InitVar, dataclass
 import numpy as np
 from typing import List, Optional
 import torch
+from tqdm import tqdm
 from transformers import AutoTokenizer
 
 if torch.cuda.is_available():
@@ -69,7 +70,7 @@ class HarmBenchJudge(Judge):
         elif val_or_eval == "eval":
             model_name = "cais/HarmBench-Llama-2-13b-cls"
         tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False, truncation_side="left")
-        self.model = LLM(model=model_name, dtype='bfloat16', tensor_parallel_size=1)
+        self.model = LLM(model=model_name, dtype='bfloat16', tensor_parallel_size=1, gpu_memory_utilization=0.7)
         self.model.set_tokenizer(tokenizer)
         self._greedy_one_one = SamplingParams(temperature=0.0, max_tokens=1)
 
@@ -145,5 +146,5 @@ class HarmBenchJudge(Judge):
     def batch_pass_at_k_judge(self, prompt_s: List[str], output_s_s: List[List[str]], context_s: List[Optional[str]]):
         return np.mean([
             self.pass_at_k_judge(prompt, outputs, context)
-            for (prompt, outputs, context) in zip(prompt_s, output_s_s, context_s)
+            for (prompt, outputs, context) in tqdm(zip(prompt_s, output_s_s, context_s), desc="batch pass@k", leave=False)
         ])

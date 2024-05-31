@@ -33,9 +33,14 @@ def header_to_dict(header):
     hparams = header.split("__")
     # print(hparams)
     for hparam in hparams:
-        for hparam_name in ("composition_target", "other_transform"):
+        for hparam_name in ("k_num_transforms", "other_transform", "composition_target", "maybe_transformation_instructions"):
             if hparam_name in hparam:
-                d[hparam_name] = hparam[len(hparam_name)+1:]
+                hparam_value = hparam[len(hparam_name)+1:]
+                if hparam_name == "k_num_transforms":
+                    hparam_value = int(hparam_value)
+                if hparam_name == "maybe_transformation_instructions":
+                    hparam_value = bool(hparam_value)
+                d[hparam_name] = hparam_value
     return d
 
 def patch_transforms(dict_header, key, value):
@@ -124,34 +129,54 @@ def populate_tries(dict_header, key, value):
     return modified_value
 
 # Define the directory path relative to the current file
-directory_path = Path(__file__).parent / "experiments/experiment_data/composition_experiment"
+raw_path = Path(__file__).parent / "experiments/experiment_data/composition_experiment"
+judging_path = Path(__file__).parent / "experiments/experiment_data/composition_experiment/val_judging"
 
 def run(f):
+    json_paths = [raw_path, ]
     # Iterate through every json file in the specified directory
-    for json_file in directory_path.glob("*.json"):
-        # Open and read the json file
-        with open(json_file, 'r') as file:
-            data = json.load(file)
-        header = data["HEADER"]
-        dict_header = header_to_dict(header)
+    for directory_path in json_paths:
+        for json_file in directory_path.glob("*.json"):
+            # Open and read the json file
+            with open(json_file, 'r') as file:
+                data = json.load(file)
+            header = data["HEADER"]
+            dict_header = header_to_dict(header)
 
-        # Iterate through the keys and modify the value if key contains 'Python markdown'
-        modified = False
-        for key in list(data.keys()):
-            if key == "HEADER":
-                continue
-            try:
-                data[key] = f(dict_header, key, data[key])
-            except PropagatedError:
-                modified = False
-                break
-            modified = True
-        
-        # Save the modified json back to the file if any modifications were made
-        if modified:
+            # Iterate through the keys and modify the value if key contains 'Python markdown'
+            modified = False
+            for key in list(data.keys()):
+                if key == "HEADER":
+                    continue
+                try:
+                    data[key] = f(dict_header, key, data[key])
+                except PropagatedError:
+                    modified = False
+                    break
+                modified = True
+            
+            # Save the modified json back to the file if any modifications were made
+            if modified:
+                with open(json_file, 'w') as file:
+                    json.dump(data, file)
+
+def run2(judging_too=False):
+    json_paths = [raw_path, ]
+    if judging_too:
+        json_paths.append(judging_path)
+    # Iterate through every json file in the specified directory
+    for directory_path in json_paths:
+        for json_file in directory_path.glob("*.json"):
+            # Open and read the json file
+            with open(json_file, 'r') as file:
+                data = json.load(file)
+            data["HEADER"] = header_to_dict(data["HEADER"])
+            
+            print(data["HEADER"])
             with open(json_file, 'w') as file:
                 json.dump(data, file)
 
 #TODO Morse code is still buggy
-run(patch_transforms)
-run(populate_tries)
+# run(patch_transforms)
+# run(populate_tries)
+run2(True)

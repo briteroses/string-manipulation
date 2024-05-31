@@ -1,6 +1,7 @@
 from collections import namedtuple
 from dataclasses import dataclass, field
 from datetime import datetime
+import gc
 from itertools import chain
 import json
 import modal
@@ -339,6 +340,8 @@ class CompositionExperiment(BaseExperiment):
             contexts = [res["context"] for res in prompt_results]
 
             if val_or_eval_or_llamaguard == "val" or val_or_eval_or_llamaguard == "eval":
+                del continuations
+                gc.collect()
                 tried_continuations = [res["tried_continuations"] for res in prompt_results]
                 asr = judge.batch_pass_at_k_judge(bad_prompts, tried_continuations, contexts)
                 judging_results[list_transformations_prompt] = {
