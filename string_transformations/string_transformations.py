@@ -322,13 +322,13 @@ class PythonMarkdown(StringTransformation):
         if issubclass(model_type, GPTFamily):
             # currently, just removes the ```python {message} ``` scaffolding, and removes the multiline string quotations that are often put around the message
             def transformation(s):
-                markdown_s = '```python\n"""' + s + '"""\n```\n'
+                markdown_s = '```python\n"""' + s + '"""\n```'
                 return markdown_s
                 
             self._f = transformation
 
             def inverse_transformation(s):
-                start_tag, end_tag = "```python\n", "```\n"
+                start_tag, end_tag = "```python\n", "\n```"
                 start_tag_idx = s.find(start_tag)
                 end_tag_idx = s.rfind(end_tag)
                 stripped_s = s[:start_tag_idx] + s[start_tag_idx+len(start_tag):end_tag_idx] + s[end_tag_idx+len(end_tag):]

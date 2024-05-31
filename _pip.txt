@@ -1,0 +1,1 @@
+pip install -q -U accelerate base58 bitsandbytes cohere datasets fastchat flash-attn google-generativeai hf-transfer huggingface_hub modal openai peft python-dotenv ray seaborn tiktoken tokenizers torch tqdm transformers wandb vllm

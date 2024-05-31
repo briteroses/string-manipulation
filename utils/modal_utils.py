@@ -74,7 +74,6 @@ cheap_image = (
         "cohere",
         "datasets",
         "fastchat",
-        "google-cloud-translate==2.0.1",
         "google-generativeai",
         "hf-transfer",
         "huggingface_hub",

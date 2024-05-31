@@ -1,9 +1,8 @@
 from collections import namedtuple
-from dataclasses import InitVar, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import chain
 import json
-from judging.harmbench import HarmBenchJudge
 import modal
 import os
 import pandas as pd
@@ -14,16 +13,24 @@ import torch
 from tqdm import tqdm
 from typing import List, Tuple
 import wandb
+import yaml
 
 from experiments.base_experiment import BaseExperiment
-# from judging.harmbench import HarmBenchJudge
+from judging.harmbench_judge import HarmBenchJudge
 from judging.llamaguard_judge import LlamaGuardJudge
 from models.black_box_model import GPT4, BlackBoxModel, GPT3pt5_Turbo, GPTFamily, HaizerMistral
 from models.model_class import LanguageModel
 from models.open_source_model import OpenSourceModel
 
-from string_transformations.string_transformations import ALL_TRANSFORMATIONS, BaseN, Id, HaizeyLanguageTranslation, Leetspeak, MorseCode, PythonMarkdown, StringTransformation, TokenizerAwareTransformation, sample_transformations
-from utils.utils import ALL_ICL_EXEMPLARS, get_greedy_one_command
+from string_transformations.string_transformations import _CIPHERS, ALL_TRANSFORMATIONS, AlternatingCase, BaseN, Binary, Id, HaizeyLanguageTranslation, Leetspeak, MorseCode, PythonMarkdown, Reversal, StringTransformation, TokenizerAwareTransformation, VowelRepetition, sample_transformations
+from utils.utils import ALL_ICL_EXEMPLARS, get_greedy_one_command, get_max_tokens_key
+
+
+CFG_PATH = Path(__file__).resolve().parents[1] / "configs/model_params.yaml"
+
+with open(CFG_PATH) as cfg_file:
+    CFG = yaml.safe_load(cfg_file)
+
 
 PARENT_PATH = Path(__file__).resolve().parents[0]
 if modal.is_local():
@@ -177,8 +184,9 @@ class CompositionExperiment(BaseExperiment):
                 if progress_num_trials >= num_attack_trials:
                     print(f"Run already finished for this hyperparameter setting.")
                     print(f"Skipping this run. Delete the file at {data_load_path} if you want to re-run.")
-                    print("Starting judging...")
-                    self.evaluate(hyperparam_setting, config)
+                    if config is not None:
+                        print("Starting judging...")
+                        self.evaluate(hyperparam_setting, config)
                     return
                 else:
                     print(f"{progress_num_trials} of {num_attack_trials} trials already finished for this hyperparameter setting.")
@@ -211,7 +219,7 @@ class CompositionExperiment(BaseExperiment):
             else:
                 transformation_instructions_prompt = ""
             
-            icl_exemplars = random.sample(ALL_ICL_EXEMPLARS, 2)
+            icl_exemplars = random.sample(ALL_ICL_EXEMPLARS, 2) #TODO 2 is actually a hyperparameter!
 
             icl_demonstrations_prompt = CompositionPrompts.icl_demonstrations(transform_list, icl_exemplars=icl_exemplars, other_transform=other_transform, composition_target=composition_target)
 
@@ -238,6 +246,19 @@ class CompositionExperiment(BaseExperiment):
                 )
 
                 greedy_one = get_greedy_one_command(self.target_model)
+                # many of these transformations give shorter responses for the same token count, so to compensate:
+                baseline_num_toks = CFG["max_tokens"]
+                if composition_target == "response":
+                    if any(isinstance(transform, _CIPHERS + (Reversal, Leetspeak, VowelRepetition, AlternatingCase, BaseN)) for transform in transform_list):
+                        baseline_num_toks *= 3
+                    if any(isinstance(transform, (MorseCode, Binary)) for transform in transform_list):
+                        baseline_num_toks *= 6
+                elif composition_target == "query":
+                    if isinstance(other_transform, _CIPHERS + (Reversal, Leetspeak, VowelRepetition, AlternatingCase, BaseN)):
+                        baseline_num_toks *= 3
+                    if isinstance(other_transform, (MorseCode, Binary)):
+                        baseline_num_toks *= 6
+                greedy_one[get_max_tokens_key(self.target_model)] = baseline_num_toks
                 continuation = self.target_model.inference(attack_prompt, **greedy_one)[0]
                 _raw_continuation = continuation
 
@@ -266,8 +287,9 @@ class CompositionExperiment(BaseExperiment):
             data_save_path = self.data_save_path(**hyperparam_setting)
             with open(data_save_path, 'w') as fout:
                 json.dump(raw_experiment_data, fout)
-        
-        self.evaluate(hyperparam_setting, config)
+
+        if config is not None:
+            self.evaluate(hyperparam_setting, config)
 
         return raw_experiment_data
     
@@ -301,7 +323,7 @@ class CompositionExperiment(BaseExperiment):
         
         if val_or_eval_or_llamaguard == "val" or val_or_eval_or_llamaguard == "eval":
             assert torch.cuda.is_available(), "We're using harmbench evaluation and we require a GPU"
-            judge = HarmBenchJudge(val_or_eval_or_llamaguard)
+            judge = HarmBenchJudge(val_or_eval=val_or_eval_or_llamaguard)
         
         elif val_or_eval_or_llamaguard == "llamaguard":
             gpt_judge_base = HaizerMistral()
@@ -317,7 +339,8 @@ class CompositionExperiment(BaseExperiment):
             contexts = [res["context"] for res in prompt_results]
 
             if val_or_eval_or_llamaguard == "val" or val_or_eval_or_llamaguard == "eval":
-                asr = judge.batch_judge(bad_prompts, continuations, contexts)
+                tried_continuations = [res["tried_continuations"] for res in prompt_results]
+                asr = judge.batch_pass_at_k_judge(bad_prompts, tried_continuations, contexts)
                 judging_results[list_transformations_prompt] = {
                     "asr": asr,
                 }

@@ -35,7 +35,7 @@ def run(val_or_eval_or_llamaguard):
     hyperparameter_grid = {
         "k_num_transforms": [1, 2, 3, 4],
         "maybe_transformation_instructions": [True],
-        "other_transform": [Id, Leetspeak],
+        "other_transform": [MorseCode, Binary, BaseN],
         "composition_target": ["response"],
     } # this grid is ~10M tokens = $300?
     response_composition_experiment = CompositionExperiment(

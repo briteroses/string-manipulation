@@ -35,16 +35,16 @@ def run(val_or_eval_or_llamaguard):
     hyperparameter_grid = {
         "k_num_transforms": [1, 2, 3, 4],
         "maybe_transformation_instructions": [True],
-        "other_transform": [Id, Leetspeak],
-        "composition_target": ["response"],
+        "other_transform": [Id, Leetspeak, LanguageTranslation],
+        "composition_target": ["query"],
     } # this grid is ~10M tokens = $300?
-    response_composition_experiment = CompositionExperiment(
+    query_composition_experiment = CompositionExperiment(
         target_model=target_model,
         num_attack_trials=num_attack_trials,
         hyperparameter_grid=hyperparameter_grid,
     )
     eval_config = {'val_or_eval_or_llamaguard': val_or_eval_or_llamaguard}
-    response_composition_experiment.run_hyperparameter_grid()
+    query_composition_experiment.run_hyperparameter_grid()
 
     # currently, len(bad_prompts) = 81 from harmbench val set
     if bool(os.environ.get("WANDB_API_KEY")):

@@ -36,8 +36,6 @@ class BaseExperiment(ABC):
         assert type(self.all_parameters) == list
     
     def run_hyperparameter_grid(self, config=None):
-        if config == None:
-            config = {}
         productable_hyperparams = {
             k: v if type(v) == list else [v, ] for k, v in self.hyperparameter_grid.items()
         }
@@ -47,8 +45,6 @@ class BaseExperiment(ABC):
             self.run(hyperparam_setting, config)
         
     def evaluate_hyperparameter_grid(self, config=None):
-        if config == None:
-            config = {}
         productable_hyperparams = {
             k: v if type(v) == list else [v, ] for k, v in self.hyperparameter_grid.items()
         }
