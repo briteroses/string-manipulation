@@ -1,9 +1,12 @@
-from pathlib import Path
+from dotenv import load_dotenv
 import json
+from pathlib import Path
 from pprint import pprint
-from models.black_box_model import GPTFamily
 
+from models.black_box_model import GPTFamily
 from string_transformations.string_transformations import ALL_TRANSFORMATIONS, BaseN, HaizeyLanguageTranslation, Id, LanguageTranslation, PythonMarkdown, TokenizerAwareTransformation
+
+load_dotenv()
 
 TRANSFORMATIONS_BY_NAME = {t.name: t for t in ALL_TRANSFORMATIONS}
 TRANSFORMATIONS_BY_NAME["Base64 encoding"] = BaseN
