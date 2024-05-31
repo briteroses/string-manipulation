@@ -11,7 +11,7 @@ from string_transformations.string_transformations import LANGUAGE_TRANSLATION_O
 from utils.modal_utils import app, cheap_modal_wrap_experiment
 
 
-CFG_PATH = Path(__file__).resolve().parents[1] / "configs/model_params.yaml"
+CFG_PATH = Path(__file__).resolve().parents[0] / "configs/model_params.yaml"
 
 with open(CFG_PATH) as cfg_file:
     CFG = yaml.safe_load(cfg_file)
