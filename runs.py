@@ -5,7 +5,7 @@ import yaml
 from pathlib import Path
 from pprint import pprint
 
-from experiments.composition import CompositionExperiment, composition_default_eval_set
+from experiments.composition import CompositionExperiment, load_harmbench_val_set
 from models.black_box_model import GPT4_Turbo
 from string_transformations.string_transformations import LANGUAGE_TRANSLATION_OPTIONS, AlternatingCase, AtbashCipher, Binary, Id, Leetspeak, HaizeyLanguageTranslation, MorseCode, Reversal, VowelRepetition
 from utils.modal_utils import app, cheap_modal_wrap_experiment
@@ -17,7 +17,7 @@ with open(CFG_PATH) as cfg_file:
     CFG = yaml.safe_load(cfg_file)
 
 if __name__ == "__main__":
-    eval_set = composition_default_eval_set()
+    eval_set = load_harmbench_val_set()
     for (behavior, context) in eval_set:
         prompt = behavior
         prompt += ("\n"+context) if context is not None else ""

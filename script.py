@@ -1,4 +1,4 @@
-from experiments.composition import composition_default_eval_set
+from experiments.composition import load_harmbench_val_set
 
 
 ENGLISH = [

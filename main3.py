@@ -33,7 +33,7 @@ def run(val_or_eval_or_llamaguard):
     # } # this grid is ~50M tokens = $1500?
 
     hyperparameter_grid = {
-        "k_num_transforms": [1, 2, 3, 4],
+        "k_num_transforms": [1],
         "maybe_transformation_instructions": [True],
         "other_transform": [MorseCode, Binary, BaseN],
         "composition_target": ["response"],

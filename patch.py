@@ -4,7 +4,7 @@ from pathlib import Path
 from pprint import pprint
 
 from models.black_box_model import GPTFamily
-from string_transformations.string_transformations import ALL_TRANSFORMATIONS, BaseN, HaizeyLanguageTranslation, Id, LanguageTranslation, PythonMarkdown, TokenizerAwareTransformation
+from string_transformations.string_transformations import ALL_TRANSFORMATIONS, BaseN, Id, LanguageTranslation, PythonMarkdown, TokenizerAwareTransformation
 
 load_dotenv()
 
@@ -22,7 +22,7 @@ def canonical_construct(transform_class):
         transform = transform_class.construct(openai_model_name="gpt-4-turbo-preview")
     elif issubclass(transform_class, PythonMarkdown):
         transform = transform_class.construct(model_type=GPTFamily)
-    elif issubclass(transform_class, (HaizeyLanguageTranslation, LanguageTranslation)):
+    elif issubclass(transform_class, (LanguageTranslation)):
         transform = transform_class.construct(choice="German")
     else:
         transform = transform_class.construct()
@@ -140,8 +140,8 @@ def run(f):
             # Open and read the json file
             with open(json_file, 'r') as file:
                 data = json.load(file)
-            header = data["HEADER"]
-            dict_header = header_to_dict(header)
+            dict_header = data["HEADER"]
+            # dict_header = header_to_dict(header)
 
             # Iterate through the keys and modify the value if key contains 'Python markdown'
             modified = False
@@ -177,6 +177,6 @@ def run2(judging_too=False):
                 json.dump(data, file)
 
 #TODO Morse code is still buggy
-# run(patch_transforms)
-# run(populate_tries)
-run2(True)
+run(patch_transforms)
+run(populate_tries)
+# run2(True)

@@ -100,6 +100,20 @@ class Reversal(StringTransformation):
         self._inverse = lambda s: s[::-1]
 
 @dataclass
+class PerWordReversal(StringTransformation):
+    name = "per-word reversal"
+    instruction = "Reverse the characters of each word, while keeping the words in the original order."
+
+    def __post_init__(self):
+        def transformation(s):
+            words = s.split()
+            reversed_words_in_order = list(map(lambda word: word[::-1], words))
+            return " ".join(reversed_words_in_order)
+        
+        self._f = transformation
+        self._inverse = transformation
+
+@dataclass
 class WordLevelReversal(StringTransformation):
     # WARNING: squashes newlines, every whitespace becomes an \s. Can change this convention later, but this is what was currently decided.
     name = "word-level reversal"
@@ -107,7 +121,7 @@ class WordLevelReversal(StringTransformation):
 
     def __post_init__(self):
         def transformation(s):
-            words = s.split(" ")
+            words = s.split()
             reversed_words = words[::-1]
             return " ".join(reversed_words)
         
@@ -118,7 +132,7 @@ def caesar_cipher_transformation(s, cipher_step):
     encoded = ""
     QUICK_FIND_ALPHABET = {ALPHABET[i]: i for i in range(len(ALPHABET))}
     for char in s:
-        if char not in ALPHABET:
+        if char.lower() not in ALPHABET:
             encoded += char
             continue
         was_upper = char.isupper()
