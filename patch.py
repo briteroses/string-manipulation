@@ -4,7 +4,7 @@ from pathlib import Path
 from pprint import pprint
 
 from models.black_box_model import GPTFamily
-from string_transformations.string_transformations import ALL_TRANSFORMATIONS, BaseN, HaizeyLanguageTranslation, Id, LanguageTranslation, PythonMarkdown, TokenizerAwareTransformation
+from string_transformations.string_transformations import ALL_TRANSFORMATIONS, BaseN, HaizeyLanguageTranslation, Id, LanguageTranslation, LatexMode, PythonMarkdown, TokenizerAwareTransformation
 
 load_dotenv()
 
@@ -20,7 +20,7 @@ class PropagatedError(Exception):
 def canonical_construct(transform_class):
     if issubclass(transform_class, TokenizerAwareTransformation):
         transform = transform_class.construct(openai_model_name="gpt-4-turbo-preview")
-    elif issubclass(transform_class, PythonMarkdown):
+    elif issubclass(transform_class, (PythonMarkdown, LatexMode)):
         transform = transform_class.construct(model_type=GPTFamily)
     elif issubclass(transform_class, (HaizeyLanguageTranslation, LanguageTranslation)):
         transform = transform_class.construct(choice="German")

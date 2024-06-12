@@ -23,7 +23,7 @@ from models.black_box_model import GPT4, BlackBoxModel, GPT3pt5_Turbo, GPTFamily
 from models.model_class import LanguageModel
 from models.open_source_model import OpenSourceModel
 
-from string_transformations.string_transformations import _CIPHERS, _STYLES, ALL_TRANSFORMATIONS, AlternatingCase, BaseN, Binary, Id, HaizeyLanguageTranslation, Leetspeak, MorseCode, PythonMarkdown, Reversal, StringTransformation, TokenizerAwareTransformation, VowelRepetition, sample_transformations
+from string_transformations.string_transformations import _CIPHERS, _EXTENDERS, _STYLES, ALL_TRANSFORMATIONS, AlternatingCase, BaseN, Binary, Delimiters, Id, HaizeyLanguageTranslation, LatexMode, Leetspeak, MorseCode, Palindrome, PerWordReversal, PrefixRotation, PythonMarkdown, Reversal, StringTransformation, TokenizerAwareReversal, TokenizerAwareTransformation, VowelRepetition, WordLevelReversal, sample_transformations
 from utils.utils import ALL_ICL_EXEMPLARS, get_greedy_one_command, get_max_tokens_key
 
 
@@ -135,7 +135,10 @@ def load_harmbench_val_set():
         )
     return ret
 
-INCOHERENCY = "INCOHERENT"
+INCOHERENCY = "NONE"
+
+_MILD_CHARACTER_LEVEL_TRANSFORMS = (WordLevelReversal, PrefixRotation)
+_SEVERE_CHARACTER_LEVEL_TRANSFORMS = _CIPHERS + (Reversal, PerWordReversal, TokenizerAwareReversal, Leetspeak, VowelRepetition, AlternatingCase, Palindrome, Delimiters)
 
 @dataclass
 class CompositionExperiment(BaseExperiment):
@@ -248,22 +251,11 @@ class CompositionExperiment(BaseExperiment):
 
                 greedy_one = get_greedy_one_command(self.target_model)
                 # many of these transformations give shorter responses for the same token count, so to compensate:
-                baseline_num_toks = CFG["max_tokens"]
                 if composition_target == "response":
-                    if any(isinstance(transform, _CIPHERS + (Reversal, Leetspeak, VowelRepetition, AlternatingCase, BaseN)) for transform in transform_list):
-                        baseline_num_toks *= 3
-                    if any(isinstance(transform, (MorseCode, Binary)) for transform in transform_list):
-                        baseline_num_toks *= 6
-                    if any(isinstance(transform, _STYLES) for transform in transform_list):
-                        baseline_num_toks += 100
+                    num_toks = self.choose_max_tokens(transform_list)
                 elif composition_target == "query":
-                    if isinstance(other_transform, _CIPHERS + (Reversal, Leetspeak, VowelRepetition, AlternatingCase, BaseN)):
-                        baseline_num_toks *= 3
-                    if isinstance(other_transform, (MorseCode, Binary)):
-                        baseline_num_toks *= 6
-                    if isinstance(other_transform, _STYLES):
-                        baseline_num_toks += 100
-                greedy_one[get_max_tokens_key(self.target_model)] = baseline_num_toks
+                    num_toks = self.choose_max_tokens(other_transform)
+                greedy_one[get_max_tokens_key(self.target_model)] = num_toks
                 continuation = self.target_model.inference(attack_prompt, **greedy_one)[0]
                 _raw_continuation = continuation
 
@@ -386,10 +378,27 @@ class CompositionExperiment(BaseExperiment):
                 transform = transform_class.construct(openai_model_name=self.target_model.name)
             elif isinstance(self.target_model, OpenSourceModel):
                 transform = transform_class.construct(open_source_model_name=self.target_model.name)
-        elif issubclass(transform_class, PythonMarkdown):
+        elif issubclass(transform_class, (PythonMarkdown, LatexMode)):
             transform = transform_class.construct(model_type=self.target_model.__class__)
         elif issubclass(transform_class, HaizeyLanguageTranslation) and maybe_other: #TODO temporarily hardcode a special case
             transform = transform_class.construct(choice="German")
         else:
             transform = transform_class.construct()
         return transform
+    
+    def choose_max_tokens(self, transform_s: StringTransformation | List[StringTransformation]):
+        def issubclass_option(t_s, class_tup):
+            if isinstance(t_s, List):
+                return any(issubclass(transform, class_tup) for transform in t_s)
+            elif isinstance(t_s, StringTransformation):
+                return issubclass(t_s, class_tup)
+        num_toks = CFG["max_tokens"]
+        if issubclass_option(transform_s, _MILD_CHARACTER_LEVEL_TRANSFORMS):
+            num_toks *= 1.5
+        if issubclass_option(transform_s, _SEVERE_CHARACTER_LEVEL_TRANSFORMS):
+            num_toks *= 3
+        if issubclass_option(transform_s, _EXTENDERS):
+            num_toks *= 6
+        if issubclass_option(transform_s, _STYLES):
+            num_toks += 200
+        return num_toks

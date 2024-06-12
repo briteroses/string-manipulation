@@ -1,4 +1,4 @@
-from string_transformations.string_transformations import ALL_TRANSFORMATIONS, PythonMarkdown, TokenizerAwareReversal
+from string_transformations.string_transformations import ALL_TRANSFORMATIONS, LatexMode, PythonMarkdown, TokenizerAwareReversal
 from judging.llamaguard_judge import LlamaGuardJudge
 from models.black_box_model import GPTFamily, GPT4, GPT3pt5_Turbo, GPT3pt5_Turbo_Instruct, Gemini_Pro, LegacyGPT, CohereCommandLight
 from models.model_class import LanguageModel
@@ -47,7 +47,7 @@ def test_string_transformations():
     for transformation in ALL_TRANSFORMATIONS:
         if issubclass(transformation, TokenizerAwareReversal):
             current_transformation = transformation.construct(openai_model_name="gpt-4")
-        elif issubclass(transformation, PythonMarkdown):
+        elif issubclass(transformation, (PythonMarkdown, LatexMode)):
             current_transformation = transformation.construct(model_type=GPT4)
         else:
             current_transformation = transformation.construct()

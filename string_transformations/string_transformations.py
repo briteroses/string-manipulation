@@ -20,6 +20,7 @@ String transformations to implement:
 
 from copy import copy
 import random
+import re
 from string import Template
 import base58
 import base64
@@ -319,6 +320,91 @@ class AlternatingCase(StringTransformation):
         self._f = transformation
         self._inverse = lambda s: s.lower()
 
+@dataclass
+class Palindrome(StringTransformation):
+    # WARNING: could get confusing with punctuation, like commas and emdashes
+    name = "palindrome"
+    instruction = "Convert each word into a palindrome by appending each word's reverse to itself."
+
+    def __post_init__(self):
+        def transformation(s):
+            words = s.split()
+            palindromes = list(map(lambda word: word + word[:-1][::-1], words))
+            return " ".join(palindromes)
+        
+        self._f = transformation
+
+        def inverse_transformation(s):
+            palindromes = s.split()
+            words = list(map(lambda palindrome: palindrome[:(len(palindrome)+1)//2], palindromes))
+            return " ".join(words)
+        
+        self._inverse = inverse_transformation
+
+@dataclass
+class Delimiters(StringTransformation):
+    delimiter: str
+    name = "interleaving with delimiter"
+    instruction: str = field(init=False)
+
+    def __post_init__(self):
+        self.instruction = f"Interleave the delimiter \"{self.delimiter}\" between the characters of each word."
+
+        def transformation(s):
+            words = s.split()
+            obfuscated_words = list(map(self.delimiter.join, words))
+            return " ".join(obfuscated_words)
+        self._f = transformation
+
+        def inverse_transformation(s):
+            obfuscated_words = s.split()
+            words = list(map(lambda word: "".join(word.split(self.delimiter)), obfuscated_words))
+            return " ".join(words)
+        self._inverse = inverse_transformation
+    
+    @classmethod
+    def construct(cls, choice=None):
+        if choice is None:
+            random_delimiter = random.choice(DELIMITER_OPTIONS)
+            return cls(delimiter=random_delimiter)
+        return cls(delimiter=choice)
+    
+    def __str__(self):
+        return self.name + " " + self.delimiter
+    
+@dataclass
+class PrefixRotation(StringTransformation):
+    # WARNING: could get confusing with punctuation, like commas and emdashes
+    name = "prefix rotation"
+    instruction = "Change the string by moving each word's first three characters to the end of the word; leave any word unchanged that is three characters or less."
+
+    def __post_init__(self):
+        def transformation(s):
+            words = s.split()
+            rotated_words = []
+            for word in words:
+                if len(word) > 3:
+                    rotated_word = word[3:] + word[:3]
+                else:
+                    rotated_word = word
+                rotated_words.append(rotated_word)
+            return " ".join(rotated_words)
+        
+        self._f = transformation
+        
+        def inverse_transformation(s):
+            words = s.split()
+            original_words = []
+            for word in words:
+                if len(word) > 3:
+                    original_word = word[-3:] + word[:-3]
+                else:
+                    original_word = word
+                original_words.append(original_word)
+            return " ".join(original_words)
+        
+        self._inverse = inverse_transformation
+
 # ~~~~~~~~~~~~~~~~~~~~
 # Transforms that I separated from the above for different "vibes"; maybe some structure/function-calling encapsulation, maybe inherent to GPT models, etc.
 # These can't be composed willy-nilly with the above transformations; will need to use these in special cases only, i.e. only as the outermost transform in a composition?
@@ -364,7 +450,6 @@ class JSON_Encapsulation(StringTransformation):
     instruction = "Change the string to be encapsulated in a json format."
 
     def __post_init__(self):
-        # currently, just removes 
         def transformation(s):
             to_json = {
                 "message": s
@@ -389,6 +474,38 @@ class JSON_Encapsulation(StringTransformation):
             return unencapsulated_s
 
         self._inverse = inverse_transformation
+
+
+@dataclass
+class LatexMode(StringTransformation):
+    # WARNING: relies on how the given model interprets latex markdown; possibly need per-model casework
+    model_type: InitVar[type]
+    name = "LaTeX"
+    instruction = "Change the string to be part of a LaTeX document."
+
+    def __post_init__(self, model_type):
+        if issubclass(model_type, GPTFamily):
+            def transformation(s):
+                markdown_s = "```latex\n\\documentclass[12pt]{article}\n\n\\begin{document}\n\n" + s + "\n\n\\end{document}\n```"
+                return markdown_s
+            
+            self._f = transformation
+
+            def inverse_transformation(s):
+                start_tag, end_tag = "```latex\n", "\n```"
+                start_tag_idx = s.find(start_tag)
+                end_tag_idx = s.rfind(end_tag)
+                before_latex, latexed, after_latex = s[:start_tag_idx], s[start_tag_idx+len(start_tag):end_tag_idx], s[end_tag_idx+len(end_tag):]
+                latexed = re.sub(r"\\(\w+)(?:\[(.*?)\])?(?:\{(.*?)\})?", "", latexed)
+                return before_latex + latexed + after_latex
+
+            self._inverse = inverse_transformation
+        else:
+            raise NotImplementedError
+    
+    @classmethod
+    def construct(cls, model_type=GPTFamily):
+        return cls(model_type=model_type)
 
 # ~~~~~~~~~~~~~~~~~~~~
 # Transforms that count as special cases, for whatever reason
@@ -543,7 +660,7 @@ class HaizeyLanguageTranslation(NonDeterministicTransformation):
     def __str__(self):
         return self.language + " " + "translation"
 
-ALL_TRANSFORMATIONS = [Reversal, TokenizerAwareReversal, WordLevelReversal, CaesarCipher, ROT13Cipher, AtbashCipher, BaseN, Binary, Leetspeak, MorseCode, VowelRepetition, AlternatingCase, PythonMarkdown, JSON_Encapsulation]
+ALL_TRANSFORMATIONS = [Reversal, PerWordReversal, TokenizerAwareReversal, WordLevelReversal, CaesarCipher, ROT13Cipher, AtbashCipher, BaseN, Binary, Leetspeak, MorseCode, VowelRepetition, AlternatingCase, Palindrome, Delimiters, PrefixRotation, PythonMarkdown, JSON_Encapsulation, LatexMode]
 
 # NOTE
 # The style transformations, Python markdown and json encapsulation, only make sense as the outermost transformation in a composition
@@ -552,6 +669,7 @@ ALL_TRANSFORMATIONS = [Reversal, TokenizerAwareReversal, WordLevelReversal, Caes
 _transformation_priorities = {
     HaizeyLanguageTranslation: -1,
     Reversal: 0,
+    PerWordReversal: 0,
     TokenizerAwareReversal: 0,
     WordLevelReversal: 0,
     CaesarCipher: 0,
@@ -560,16 +678,20 @@ _transformation_priorities = {
     Leetspeak: 0,
     VowelRepetition: 0,
     AlternatingCase: 0,
+    Palindrome: 0,
+    Delimiters: 0,
+    PrefixRotation: 0,
     MorseCode: 1,
     Binary: 1,
     BaseN: 1,
     PythonMarkdown: 2,
     JSON_Encapsulation: 2,
+    LatexMode: 2,
 }
-_REVERSALS = (Reversal, TokenizerAwareReversal, WordLevelReversal)
+_REVERSALS = (Reversal, PerWordReversal, TokenizerAwareReversal, WordLevelReversal)
 _CIPHERS = (CaesarCipher, ROT13Cipher, AtbashCipher)
 _EXTENDERS = (MorseCode, Binary, BaseN)
-_STYLES = (PythonMarkdown, JSON_Encapsulation)
+_STYLES = (PythonMarkdown, JSON_Encapsulation, LatexMode)
 def sample_transformations(k: int):
     """
     Call this instead of `random.sample(ALL_TRANSFORMATIONS, k)`.
@@ -601,3 +723,6 @@ BASE_N_OPTIONS = [64,]
 # These language defaults should reflect cultural + geographic diversity while all using the English alphabet (mostly).
 # LANGUAGE_TRANSLATION_OPTIONS = ["Spanish", "German", "Turkish", "Indonesian", "Swahili"]
 LANGUAGE_TRANSLATION_OPTIONS = ["German",]
+
+# DELIMITER_OPTIONS = ["!", "@", "#", "$", "%"]
+DELIMITER_OPTIONS = ["@", ]
