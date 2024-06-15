@@ -176,7 +176,6 @@ def run2(judging_too=False):
             with open(json_file, 'w') as file:
                 json.dump(data, file)
 
-#TODO Morse code is still buggy
 run(patch_transforms)
 run(populate_tries)
 # run2(True)

@@ -660,14 +660,14 @@ class HaizeyLanguageTranslation(NonDeterministicTransformation):
     def __str__(self):
         return self.language + " " + "translation"
 
-ALL_TRANSFORMATIONS = [Reversal, PerWordReversal, TokenizerAwareReversal, WordLevelReversal, CaesarCipher, ROT13Cipher, AtbashCipher, BaseN, Binary, Leetspeak, MorseCode, VowelRepetition, AlternatingCase, Palindrome, Delimiters, PrefixRotation, PythonMarkdown, JSON_Encapsulation, LatexMode]
+ALL_TRANSFORMATIONS = [Reversal, PerWordReversal, WordLevelReversal, CaesarCipher, ROT13Cipher, AtbashCipher, BaseN, Binary, Leetspeak, MorseCode, VowelRepetition, AlternatingCase, Palindrome, Delimiters, PrefixRotation, PythonMarkdown, JSON_Encapsulation, LatexMode, LanguageTranslation] # no TokenizerAwareReversal
 
 # NOTE
 # The style transformations, Python markdown and json encapsulation, only make sense as the outermost transformation in a composition
 # Morse code, BaseN, binary change the string from alphabetical -> numeral chars, so they need to be after all "main" compositions (but can still be before style transformations)
 # Language translation only works on intact English text, so can only be used once and as the innermost transformation in a composition
 _transformation_priorities = {
-    HaizeyLanguageTranslation: -1,
+    LanguageTranslation: -1,
     Reversal: 0,
     PerWordReversal: 0,
     TokenizerAwareReversal: 0,
@@ -692,14 +692,14 @@ _REVERSALS = (Reversal, PerWordReversal, TokenizerAwareReversal, WordLevelRevers
 _CIPHERS = (CaesarCipher, ROT13Cipher, AtbashCipher)
 _EXTENDERS = (MorseCode, Binary, BaseN)
 _STYLES = (PythonMarkdown, JSON_Encapsulation, LatexMode)
-def sample_transformations(k: int):
+def sample_transformations(k: int, allowed_transforms=ALL_TRANSFORMATIONS):
     """
-    Call this instead of `random.sample(ALL_TRANSFORMATIONS, k)`.
+    Call this instead of `random.sample(allowed_transforms, k)`.
     """
     # There are a ton of rules around what compositions are valid or not, so we'll have to hardcode these a lot.
     # Basically, we want to follow the priorities as above, and we don't want to sample multiple of the same "type".
-    t_choice = random.choice(ALL_TRANSFORMATIONS)
-    remaining_transformations = copy(ALL_TRANSFORMATIONS)
+    t_choice = random.choice(allowed_transforms)
+    remaining_transformations = copy(allowed_transforms)
     ret = [t_choice, ]
     k -= 1
     
@@ -721,8 +721,8 @@ def sample_transformations(k: int):
 BASE_N_OPTIONS = [64,]
 
 # These language defaults should reflect cultural + geographic diversity while all using the English alphabet (mostly).
-# LANGUAGE_TRANSLATION_OPTIONS = ["Spanish", "German", "Turkish", "Indonesian", "Swahili"]
-LANGUAGE_TRANSLATION_OPTIONS = ["German",]
+LANGUAGE_TRANSLATION_OPTIONS = ["Spanish", "German", "Turkish", "Indonesian", "Swahili"]
+# LANGUAGE_TRANSLATION_OPTIONS = ["German",]
 
 # DELIMITER_OPTIONS = ["!", "@", "#", "$", "%"]
 DELIMITER_OPTIONS = ["@", ]

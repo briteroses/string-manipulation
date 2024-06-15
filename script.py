@@ -1,4 +1,4 @@
-from experiments.composition import load_harmbench_val_set
+from experiments.composition import load_safety_data
 
 
 ENGLISH = [

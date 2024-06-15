@@ -1,12 +1,12 @@
 import random
 import string
 
-from experiments.composition import load_harmbench_val_set
+from experiments.composition import load_safety_data
 from judging.harmbench_judge import HarmBenchJudge
 
 
 def regurgitation():
-    eval_set = load_harmbench_val_set()
+    eval_set = load_safety_data()
 
     bad_prompts = [prompt.behavior for prompt in eval_set]
     contexts = [prompt.context for prompt in eval_set]
@@ -22,7 +22,7 @@ def gibberish():
         possible_characters = string.ascii_letters + string.digits + string.punctuation# + "😀😃😄😁😆😅😂🤣😊😇🙂🙃😉😌😍🥰😘😗😙😚😋😛😝😜🤪🤨🧐🤓😎🤩🥳😏😒😞😔😟😕🙁☹️😣😖😫😩🥺😢😭😤😠😡🤬😱😨😰😥😓🤗🤔🤭🤫🤥😶😐😑😬🙄😯😦😧😮😲🥱😴🤤😪😵🤐🥴🤢🤮🤧😷🤒🤕🤑🤠😈👿👹👺🤡💩👻💀☠️👽👾🤖🎃😺😸😹😻😼😽🙀😿😾"
         return ''.join(random.choice(possible_characters) for _ in range(length))
 
-    eval_set = load_harmbench_val_set()
+    eval_set = load_safety_data()
 
     bad_prompts = [prompt.behavior for prompt in eval_set]
     contexts = [prompt.context for prompt in eval_set]
@@ -45,7 +45,7 @@ def gibberish_regurgitation():
                 gr += ch
         return gr
 
-    eval_set = load_harmbench_val_set()
+    eval_set = load_safety_data()
 
     bad_prompts = [prompt.behavior for prompt in eval_set]
     contexts = [prompt.context for prompt in eval_set]
