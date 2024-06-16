@@ -85,13 +85,30 @@ class AdaptiveAttackExperiment(BaseExperiment):
 
         attack_budget = hyperparam_setting["attack_budget"]
 
-        experiment_data = {}
-        experiment_header = self._raw_data_path(hyperparam_setting)
-        experiment_data["HEADER"] = experiment_header
+        load_path = self.data_save_path(**hyperparam_setting)
+        if os.path.exists(load_path):
+            print("WARNING: if results exist for a different dataset than the current run, then this run may have errors -- clean up your files!")
+            with open(load_path, 'r') as fin:
+                experiment_data = json.load(fin)
+                progress = len(experiment_data["raw_data"])
+                if progress >= len(safety_dataset):
+                    print(f"Run already finished for this hyperparameter setting.")
+                    print(f"Skipping this run. Delete the file at {load_path} if you want to re-run.")
+                    return
+                else:
+                    print(f"{progress} of {len(safety_dataset)} samples already finished for this hyperparameter setting. Continuing...")
+                    bad_prompt_data = experiment_data["raw_data"]
+                    num_successful_attacks = sum(datum["successful"] for datum in bad_prompt_data)
+        else:
+            experiment_data = {}
+            experiment_header = self._raw_data_path(**hyperparam_setting)
+            experiment_data["HEADER"] = experiment_header
+            progress = 0
+            bad_prompt_data = []
+            num_successful_attacks = 0
 
-        bad_prompt_data = []
-        num_successful_attacks = 0
-        for bad_prompt in tqdm(safety_dataset, desc="bad prompt"):
+        for i in tqdm(range(progress, len(safety_dataset)), desc="bad prompt"):
+            bad_prompt = safety_dataset[i]
             if isinstance(bad_prompt, HarmBenchPrompt):
                 bad_prompt_behavior, bad_prompt_context = bad_prompt.behavior, bad_prompt.context
                 bad_prompt_as_input = bad_prompt_behavior + (f'\n{bad_prompt_context}' if bad_prompt_context is not None else "")
@@ -173,17 +190,24 @@ class AdaptiveAttackExperiment(BaseExperiment):
                 "successful": successful,
                 "continuations": continuations,
             })
+            experiment_data["raw_data"] = bad_prompt_data
+
+            save_path = self.data_save_path(**hyperparam_setting)
+            with open(save_path, 'w') as fout:
+                json.dump(experiment_data, fout)
         
         asr = num_successful_attacks / len(safety_dataset)
 
         experiment_data["asr"] = asr
-        experiment_data["raw_data"] = bad_prompt_data
 
         save_path = self.data_save_path(**hyperparam_setting)
         with open(save_path, 'w') as fout:
             json.dump(experiment_data, fout)
         
         return experiment_data
+    
+    def evaluate_hyperparameter_grid(self, config=None):
+        raise ValueError("No evaluation to be done... the run is the evaluation.")
 
     def data_save_path(self, **hyperparam_setting):
         hyperparam_data_path = self.data_path(**hyperparam_setting)
