@@ -11,14 +11,14 @@ import random
 from tqdm import tqdm
 from models.black_box_model import GPTFamily
 from models.open_source_model import OpenSourceModel
-from utils.utils import ALL_ICL_EXEMPLARS, get_greedy_one_command, get_max_tokens_key
+from utils.utils import ALL_ICL_EXEMPLARS, get_context_length_for_model, get_greedy_one_command, get_max_tokens_key
 import wandb
 import yaml
 
-from experiments.composition import _MILD_CHARACTER_LEVEL_TRANSFORMS, _SEVERE_CHARACTER_LEVEL_TRANSFORMS, CompositionPrompts, HarmBenchPrompt, INCOHERENCY, load_safety_data, QUERY_COMPOSITION_PROMPT, RESPONSE_COMPOSITION_PROMPT
+from experiments.composition import _CHARACTER_LEVEL_TRANSFORMS, CompositionPrompts, HarmBenchPrompt, INCOHERENCY, load_safety_data, QUERY_COMPOSITION_PROMPT, RESPONSE_COMPOSITION_PROMPT
 from judging.harmbench_judge import HarmBenchJudge
 from models.model_class import LanguageModel
-from string_transformations.string_transformations import _EXTENDERS, _STYLES, ALL_TRANSFORMATIONS, AlternatingCase, BaseN, Binary, Id, LatexMode, Leetspeak, MorseCode, PythonMarkdown, Reversal, StringTransformation, TokenizerAwareTransformation, sample_transformations
+from string_transformations.string_transformations import _EXTENDERS, _STYLES, ALL_TRANSFORMATIONS, AlternatingCase, AtbashCipher, BaseN, Binary, CaesarCipher, Delimiters, Id, JSON_Encapsulation, LanguageTranslation, LatexMode, Leetspeak, MorseCode, Palindrome, PerWordReversal, PrefixRotation, PythonMarkdown, ROT13Cipher, Reversal, StringTransformation, TokenizerAwareTransformation, VowelRepetition, WordLevelReversal, sample_transformations
 
 
 CFG_PATH = Path(__file__).resolve().parents[1] / "configs/model_params.yaml"
@@ -41,14 +41,15 @@ ADAPTIVE_SAMPLING_OPTIONS = [
     AdaptiveSamplingParams("query", 1),
     AdaptiveSamplingParams("response", 1),
     AdaptiveSamplingParams("response", 2),
+    AdaptiveSamplingParams("response", 3),
 ]
 
-QUERY_ALLOWED_TRANSFORMS = [Reversal, Leetspeak, AlternatingCase, MorseCode, Binary, BaseN]
-RESPONSE_ALLOWED_TRANSFORMS = ALL_TRANSFORMATIONS
+QUERY_ALLOWED_TRANSFORMS = [Reversal, PerWordReversal, WordLevelReversal, CaesarCipher, ROT13Cipher, BaseN, Binary, Leetspeak, MorseCode, VowelRepetition, AlternatingCase, Palindrome, Delimiters, PrefixRotation]
+RESPONSE_ALLOWED_TRANSFORMS = [PerWordReversal, CaesarCipher, ROT13Cipher, BaseN, Binary, Leetspeak, MorseCode, VowelRepetition, AlternatingCase, Palindrome, Delimiters, PrefixRotation, PythonMarkdown, JSON_Encapsulation, LatexMode, LanguageTranslation]
 
 def adaptive_default_hparams():
     return {
-        "attack_budget": [20,],
+        "attack_budget": [15,],
     }
 @dataclass
 class AdaptiveAttackExperiment(BaseExperiment):
@@ -90,14 +91,15 @@ class AdaptiveAttackExperiment(BaseExperiment):
             print("WARNING: if results exist for a different dataset than the current run, then this run may have errors -- clean up your files!")
             with open(load_path, 'r') as fin:
                 experiment_data = json.load(fin)
-                progress = len(experiment_data["raw_data"])
+                progress = len(experiment_data["data"])
                 if progress >= len(safety_dataset):
                     print(f"Run already finished for this hyperparameter setting.")
                     print(f"Skipping this run. Delete the file at {load_path} if you want to re-run.")
                     return
                 else:
                     print(f"{progress} of {len(safety_dataset)} samples already finished for this hyperparameter setting. Continuing...")
-                    bad_prompt_data = experiment_data["raw_data"]
+                    bad_prompt_data = experiment_data["data"]
+                    raw_output_data = experiment_data["raw_outputs"]
                     num_successful_attacks = sum(datum["successful"] for datum in bad_prompt_data)
         else:
             experiment_data = {}
@@ -105,6 +107,7 @@ class AdaptiveAttackExperiment(BaseExperiment):
             experiment_data["HEADER"] = experiment_header
             progress = 0
             bad_prompt_data = []
+            raw_output_data = []
             num_successful_attacks = 0
 
         for i in tqdm(range(progress, len(safety_dataset)), desc="bad prompt"):
@@ -119,17 +122,17 @@ class AdaptiveAttackExperiment(BaseExperiment):
             continuations = []
             successful = False
 
-            for _ in tqdm(range(attack_budget), desc="attack trial", leave=False):
+            for trial in tqdm(range(attack_budget), desc="attack trial", leave=False):
 
                 adaptive_sampling_params = random.choice(ADAPTIVE_SAMPLING_OPTIONS)
-                if adaptive_sampling_params.composition_target == "query":
-                    composition_prompt = QUERY_COMPOSITION_PROMPT
-                    allowed_composition_transforms = QUERY_ALLOWED_TRANSFORMS
-                    allowed_other_transforms = RESPONSE_ALLOWED_TRANSFORMS
-                elif adaptive_sampling_params.composition_target == "response":
+                if adaptive_sampling_params.composition_target == "response":
                     composition_prompt = RESPONSE_COMPOSITION_PROMPT
                     allowed_composition_transforms = RESPONSE_ALLOWED_TRANSFORMS
                     allowed_other_transforms = QUERY_ALLOWED_TRANSFORMS
+                elif adaptive_sampling_params.composition_target == "query":
+                    composition_prompt = QUERY_COMPOSITION_PROMPT
+                    allowed_composition_transforms = QUERY_ALLOWED_TRANSFORMS
+                    allowed_other_transforms = RESPONSE_ALLOWED_TRANSFORMS
 
                 other_transform = self._construct_transform(random.choice(allowed_other_transforms))
                 
@@ -175,7 +178,19 @@ class AdaptiveAttackExperiment(BaseExperiment):
                         continuation = other_transform.invert(continuation)
                 except:
                     continuation = INCOHERENCY
-                continuations.append(continuation)
+
+                if adaptive_sampling_params.composition_target == "response":
+                    query_transform_printout = str(other_transform)
+                    response_transform_printout = list(map(str, transform_list))
+                elif adaptive_sampling_params.composition_target == "query":
+                    query_transform_printout = list(map(str, transform_list))
+                    response_transform_printout = str(other_transform)
+
+                continuations.append({
+                    "query": query_transform_printout,
+                    "response": response_transform_printout,
+                    "continuation": continuation,
+                })
                 
                 single_asr = judge(bad_prompt_behavior, continuation, bad_prompt_context)
 
@@ -184,13 +199,20 @@ class AdaptiveAttackExperiment(BaseExperiment):
                     num_successful_attacks += 1
                     break
 
+            tries_until_success = trial + 1 if successful else None
             bad_prompt_data.append({
                 "behavior": bad_prompt_behavior,
                 "context": bad_prompt_context,
                 "successful": successful,
+                "tries_until_success": tries_until_success,
+            })
+            raw_output_data.append({
+                "behavior": bad_prompt_behavior,
+                "context": bad_prompt_context,
                 "continuations": continuations,
             })
-            experiment_data["raw_data"] = bad_prompt_data
+            experiment_data["data"] = bad_prompt_data
+            experiment_data["raw_outputs"] = raw_output_data
 
             save_path = self.data_save_path(**hyperparam_setting)
             with open(save_path, 'w') as fout:
@@ -207,6 +229,9 @@ class AdaptiveAttackExperiment(BaseExperiment):
         return experiment_data
     
     def evaluate_hyperparameter_grid(self, config=None):
+        raise ValueError("No evaluation to be done... the run is the evaluation.")
+
+    def evaluate(self, **kwargs):
         raise ValueError("No evaluation to be done... the run is the evaluation.")
 
     def data_save_path(self, **hyperparam_setting):
@@ -239,14 +264,13 @@ class AdaptiveAttackExperiment(BaseExperiment):
             elif isinstance(t_s, StringTransformation):
                 return isinstance(t_s, class_tup)
         num_toks = CFG["max_tokens"]
-        if issubclass_option(transform_s, _MILD_CHARACTER_LEVEL_TRANSFORMS):
-            num_toks *= 1.5
-        if issubclass_option(transform_s, _SEVERE_CHARACTER_LEVEL_TRANSFORMS):
+        if issubclass_option(transform_s, _CHARACTER_LEVEL_TRANSFORMS):
             num_toks *= 3
         if issubclass_option(transform_s, _EXTENDERS):
             num_toks *= 6
         if issubclass_option(transform_s, _STYLES):
             num_toks += 200
         num_toks = int(num_toks)
+        num_toks = min(num_toks, get_context_length_for_model(self.target_model))
         return num_toks
     

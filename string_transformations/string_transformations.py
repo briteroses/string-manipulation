@@ -196,27 +196,47 @@ class BaseN(StringTransformation):
             self.name = "Base16 encoding"
             self.instruction = "Encode the string using Base16 encoding."
             transformation = lambda s: base64.b16encode(s.encode('utf-8')).decode('utf-8')
-            inverse_transformation = lambda s: base64.b16decode(s.encode('utf-8')).decode('utf-8')
+            def inverse_transformation(s):
+                try:
+                    return base64.b16decode(s.encode('utf-8')).decode('utf-8')
+                except UnicodeDecodeError:
+                    return s
         elif self.base_number == 32:
             self.name = "Base32 encoding"
             self.instruction = "Encode the string using Base32 encoding."
             transformation = lambda s: base64.b32encode(s.encode('utf-8')).decode('utf-8')
-            inverse_transformation = lambda s: base64.b32decode(s.encode('utf-8')).decode('utf-8')
+            def inverse_transformation(s):
+                try:
+                    return base64.b32decode(s.encode('utf-8')).decode('utf-8')
+                except UnicodeDecodeError:
+                    return s
         elif self.base_number == 64:
             self.name = "Base64 encoding"
             self.instruction = "Encode the string using Base64 encoding."
             transformation = lambda s: base64.b64encode(s.encode('utf-8')).decode('utf-8')
-            inverse_transformation = lambda s: base64.b64decode(s.encode('utf-8')).decode('utf-8')
+            def inverse_transformation(s):
+                try:
+                    return base64.b64decode(s.encode('utf-8')).decode('utf-8')
+                except UnicodeDecodeError:
+                    return s
         elif self.base_number == 85:
             self.name = "Base85 encoding"
             self.instruction = "Encode the string using Base85 encoding."
             transformation = lambda s: base64.b85encode(s.encode('utf-8')).decode('utf-8')
-            inverse_transformation = lambda s: base64.b85decode(s.encode('utf-8')).decode('utf-8')
+            def inverse_transformation(s):
+                try:
+                    return base64.b85decode(s.encode('utf-8')).decode('utf-8')
+                except UnicodeDecodeError:
+                    return s
         elif self.base_number == 58:
             self.name = "Base58 encoding"
             self.instruction = "Encode the string using Base58 encoding."
             transformation = lambda s: base58.b58encode(s.encode('utf-8')).decode('utf-8')
-            inverse_transformation = lambda s: base58.b58decode(s.encode('utf-8')).decode('utf-8')
+            def inverse_transformation(s):
+                try:
+                    return base58.b58decode(s.encode('utf-8')).decode('utf-8')
+                except UnicodeDecodeError:
+                    return s
         else:
             raise ValueError(f"Unsupported base number: {self.base_number}")
 
@@ -240,7 +260,10 @@ class Binary(StringTransformation):
             return " ".join(format(ord(ch), "08b") for ch in s)
         
         def inverse_transformation(s):
-            return "".join(chr(int(code, 2)) for code in s.split())
+            try:
+                return "".join(chr(int(code, 2)) for code in s.split())
+            except ValueError:
+                return s
 
         self._f = transformation
         self._inverse = inverse_transformation
@@ -336,7 +359,13 @@ class Palindrome(StringTransformation):
 
         def inverse_transformation(s):
             palindromes = s.split()
-            words = list(map(lambda palindrome: palindrome[:(len(palindrome)+1)//2], palindromes))
+            words = []
+            for palindrome in palindromes:
+                if palindrome.lower() != palindrome.lower()[::-1]:
+                    words.append(palindrome)
+                else:
+                    word = palindrome[:(len(palindrome)+1)//2]
+                    words.append(word)
             return " ".join(words)
         
         self._inverse = inverse_transformation
@@ -431,6 +460,8 @@ class PythonMarkdown(StringTransformation):
                 start_tag, end_tag = "```python\n", "\n```"
                 start_tag_idx = s.find(start_tag)
                 end_tag_idx = s.rfind(end_tag)
+                if start_tag_idx == -1 or end_tag_idx == -1: #style was not formed correctly... just bypass
+                    return s
                 stripped_s = s[:start_tag_idx] + s[start_tag_idx+len(start_tag):end_tag_idx] + s[end_tag_idx+len(end_tag):]
                 stripped_s = stripped_s.replace('"""', '')
                 return stripped_s
@@ -492,9 +523,11 @@ class LatexMode(StringTransformation):
             self._f = transformation
 
             def inverse_transformation(s):
-                start_tag, end_tag = "```latex\n", "\n```"
+                start_tag, end_tag = "\\begin{document}", "\\end{document}"
                 start_tag_idx = s.find(start_tag)
                 end_tag_idx = s.rfind(end_tag)
+                if start_tag_idx == -1 or end_tag_idx == -1: #style was not formed correctly... just bypass
+                    return s
                 before_latex, latexed, after_latex = s[:start_tag_idx], s[start_tag_idx+len(start_tag):end_tag_idx], s[end_tag_idx+len(end_tag):]
                 latexed = re.sub(r"\\(\w+)(?:\[(.*?)\])?(?:\{(.*?)\})?", "", latexed)
                 return before_latex + latexed + after_latex
@@ -721,7 +754,7 @@ def sample_transformations(k: int, allowed_transforms=ALL_TRANSFORMATIONS):
 BASE_N_OPTIONS = [64,]
 
 # These language defaults should reflect cultural + geographic diversity while all using the English alphabet (mostly).
-LANGUAGE_TRANSLATION_OPTIONS = ["Spanish", "German", "Turkish", "Indonesian", "Swahili"]
+LANGUAGE_TRANSLATION_OPTIONS = ["Turkish", "Indonesian", "Swahili"]
 # LANGUAGE_TRANSLATION_OPTIONS = ["German",]
 
 # DELIMITER_OPTIONS = ["!", "@", "#", "$", "%"]

@@ -137,8 +137,7 @@ def load_safety_data(val_or_eval="val"):
 
 INCOHERENCY = "NONE"
 
-_MILD_CHARACTER_LEVEL_TRANSFORMS = (WordLevelReversal, PrefixRotation)
-_SEVERE_CHARACTER_LEVEL_TRANSFORMS = _CIPHERS + (Reversal, PerWordReversal, TokenizerAwareReversal, Leetspeak, VowelRepetition, AlternatingCase, Palindrome, Delimiters)
+_CHARACTER_LEVEL_TRANSFORMS = _CIPHERS + (Reversal, PerWordReversal, TokenizerAwareReversal, Leetspeak, VowelRepetition, AlternatingCase, Palindrome, Delimiters, PrefixRotation)
 
 @dataclass
 class CompositionExperiment(BaseExperiment):
@@ -257,7 +256,7 @@ class CompositionExperiment(BaseExperiment):
                 elif composition_target == "query":
                     num_toks = self.choose_max_tokens(other_transform)
                 greedy_one[get_max_tokens_key(self.target_model)] = num_toks
-                
+
                 continuation = self.target_model.inference(attack_prompt, **greedy_one)[0]
                 _raw_continuation = continuation
 
@@ -398,9 +397,7 @@ class CompositionExperiment(BaseExperiment):
             elif isinstance(t_s, StringTransformation):
                 return isinstance(t_s, class_tup)
         num_toks = CFG["max_tokens"]
-        if issubclass_option(transform_s, _MILD_CHARACTER_LEVEL_TRANSFORMS):
-            num_toks *= 1.5
-        if issubclass_option(transform_s, _SEVERE_CHARACTER_LEVEL_TRANSFORMS):
+        if issubclass_option(transform_s, _CHARACTER_LEVEL_TRANSFORMS):
             num_toks *= 3
         if issubclass_option(transform_s, _EXTENDERS):
             num_toks *= 6

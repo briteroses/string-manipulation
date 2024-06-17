@@ -51,7 +51,7 @@ class GPTFamily(BlackBoxModel):
             self.client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
         else:
             self.client = OpenAI(base_url=self._base_url, api_key=os.environ["OPENAI_API_KEY"])
-        if self.name == "mistralai/Mistral-7B-Instruct-v0.2":
+        if getattr(self, "idc_about_tokenizer", False):
             self._encoding = None
         else:
             self._encoding = tiktoken.encoding_for_model(self.name)
@@ -178,8 +178,18 @@ class HaizerMistral(GPTFamily):
     name = "mistralai/Mistral-7B-Instruct-v0.2"
     description = "Our custom Mistral"
     scale = None
-    scale_ranking = 5
+    scale_ranking = 0
     _base_url = "https://mistral.haizelabs.com/v1"
+    idc_about_tokenizer = True
+
+@dataclass
+class HaizerHarmbenchTestJudge(GPTFamily):
+    name = "cais/HarmBench-Llama-2-13b-cls"
+    description = "Our self-host of HarmBench test judge"
+    scale = None
+    scale_ranking = 0
+    _base_url = "https://llama.haizelabs.com/v1"
+    idc_about_tokenizer = True
 
 
 @dataclass
