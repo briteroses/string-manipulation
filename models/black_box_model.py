@@ -11,7 +11,7 @@ from models.model_class import LanguageModel
 
 import cohere
 import google.generativeai as gemini
-from openai import OpenAI
+from openai import OpenAI, BadRequestError
 from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.completion import Completion as LegacyCompletion
 import tiktoken
@@ -21,6 +21,11 @@ CFG_PATH = Path(__file__).resolve().parents[1] / "configs/model_params.yaml"
 with open(CFG_PATH) as cfg_file:
     CFG = yaml.safe_load(cfg_file)
 
+class MaxTokensExceededError(Exception):
+    """Exception raised when the number of tokens exceeds the maximum allowed limit."""
+    def __init__(self, message="The number of tokens in the input has exceeded the maximum allowed limit."):
+        self.message = message
+        super().__init__(self.message)
 
 @dataclass
 class BlackBoxModel(LanguageModel):
@@ -107,6 +112,8 @@ class GPTFamily(BlackBoxModel):
             
             except Exception as e:
                 print(type(e), e)
+                if isinstance(e, BadRequestError) and "Please reduce the length of the messages or completion." in e.message:
+                    raise MaxTokensExceededError("The request exceeded the maximum number of tokens allowed.") from e
                 print(f"OpenAI API call failed, sleeping for {10 * (i+1)} seconds...")
                 time.sleep(10 * (i + 1))
 

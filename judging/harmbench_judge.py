@@ -1,7 +1,7 @@
 from dataclasses import InitVar, dataclass
 import numpy as np
 from typing import List, Optional
-from models.black_box_model import HaizerHarmbenchTestJudge
+from models.black_box_model import HaizerHarmbenchTestJudge, MaxTokensExceededError
 import torch
 from tqdm import tqdm
 from transformers import AutoTokenizer
@@ -75,6 +75,13 @@ class HarmBenchJudge(Judge):
         elif val_or_eval == "eval":
             self.model = HaizerHarmbenchTestJudge()
 
+    def _judge_context_len_backoff(self, judge_input, **greedy_one_one):
+        assert isinstance(self.model, HaizerHarmbenchTestJudge), "Uses OpenAI API error messages; basically unimplemented for huggingface"
+        try:
+            return self.model.inference(judge_input, **greedy_one_one)[0]
+        except MaxTokensExceededError:
+            return "no"
+
     def __call__(self, prompt, response, context=None):
         if context is None:
             judge_input = LLAMA2_CLS_PROMPT['prompt'].format(behavior=prompt, generation=response)
@@ -84,7 +91,11 @@ class HarmBenchJudge(Judge):
         if isinstance(self.model, HaizerHarmbenchTestJudge):
             greedy_one_one = get_greedy_one_command(self.model)
             greedy_one_one[get_max_tokens_key(self.model)] = 1
-            judge_output = self.model.inference(judge_input, **greedy_one_one)[0]
+            try:
+                judge_output = self._judge_context_len_backoff(judge_input, **greedy_one_one)
+            except MaxTokensExceededError:
+                score = 0 # by default, this is a failed attack
+                return score
         else:
             judge_input = [judge_input,]
             greedy_one_one = SamplingParams(temperature=0.0, max_tokens=1)
@@ -125,7 +136,7 @@ class HarmBenchJudge(Judge):
             greedy_one_one = get_greedy_one_command(self.model)
             greedy_one_one[get_max_tokens_key(self.model)] = 1
             judge_outputs = [
-                self.model.inference(judge_input, **greedy_one_one)[0]
+                self._judge_context_len_backoff(judge_input, **greedy_one_one)
                 for judge_input in judge_inputs
             ]
         else:
@@ -154,7 +165,7 @@ class HarmBenchJudge(Judge):
             greedy_one_one = get_greedy_one_command(self.model)
             greedy_one_one[get_max_tokens_key(self.model)] = 1
             judge_outputs = [
-                self.model.inference(judge_input, **greedy_one_one)[0]
+                self._judge_context_len_backoff(judge_input, **greedy_one_one)
                 for judge_input in judge_inputs
             ]
         else:

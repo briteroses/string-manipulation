@@ -500,9 +500,12 @@ class JSON_Encapsulation(StringTransformation):
             return ret
 
         def inverse_transformation(s):
-            messages = unpack_dict(json.loads(s, strict=False))
-            unencapsulated_s = "\n".join(messages)
-            return unencapsulated_s
+            try:
+                messages = unpack_dict(json.loads(s, strict=False))
+                unencapsulated_s = "\n".join(messages)
+                return unencapsulated_s
+            except json.JSONDecodeError:
+                return s
 
         self._inverse = inverse_transformation
 
@@ -754,8 +757,7 @@ def sample_transformations(k: int, allowed_transforms=ALL_TRANSFORMATIONS):
 BASE_N_OPTIONS = [64,]
 
 # These language defaults should reflect cultural + geographic diversity while all using the English alphabet (mostly).
-LANGUAGE_TRANSLATION_OPTIONS = ["Turkish", "Indonesian", "Swahili"]
-# LANGUAGE_TRANSLATION_OPTIONS = ["German",]
+LANGUAGE_TRANSLATION_OPTIONS = ["Spanish", "German", "Turkish", "Indonesian", "Swahili"]
 
 # DELIMITER_OPTIONS = ["!", "@", "#", "$", "%"]
 DELIMITER_OPTIONS = ["@", ]
