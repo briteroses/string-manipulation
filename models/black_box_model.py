@@ -158,6 +158,7 @@ class GPT4o(GPTFamily):
     description = "Newest model in OpenAI GPT API model family. Has native multimodal capabilities."
     scale = None
     scale_ranking = 1
+    idc_about_tokenizer = True
 
 @dataclass
 class GPT4(GPTFamily):

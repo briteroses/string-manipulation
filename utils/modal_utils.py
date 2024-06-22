@@ -96,7 +96,7 @@ cheap_image = (
 
 app = modal.App("string-transformation-adaptive-attack")
 
-vol = modal.Volume.from_name("string-transformation-adaptive-attack", create_if_missing=True)
+vol = modal.Volume.from_name("final-string-transformation-adaptive-attack", create_if_missing=True)
 
 config_mounts = [modal.Mount.from_local_dir(Path(__file__).resolve().parents[1] / "configs", remote_path="/root/configs")]
 

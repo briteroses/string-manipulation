@@ -199,7 +199,7 @@ class BaseN(StringTransformation):
             def inverse_transformation(s):
                 try:
                     return base64.b16decode(s.encode('utf-8')).decode('utf-8')
-                except UnicodeDecodeError:
+                except:
                     return s
         elif self.base_number == 32:
             self.name = "Base32 encoding"
@@ -208,7 +208,7 @@ class BaseN(StringTransformation):
             def inverse_transformation(s):
                 try:
                     return base64.b32decode(s.encode('utf-8')).decode('utf-8')
-                except UnicodeDecodeError:
+                except:
                     return s
         elif self.base_number == 64:
             self.name = "Base64 encoding"
@@ -217,7 +217,7 @@ class BaseN(StringTransformation):
             def inverse_transformation(s):
                 try:
                     return base64.b64decode(s.encode('utf-8')).decode('utf-8')
-                except UnicodeDecodeError:
+                except:
                     return s
         elif self.base_number == 85:
             self.name = "Base85 encoding"
@@ -226,7 +226,7 @@ class BaseN(StringTransformation):
             def inverse_transformation(s):
                 try:
                     return base64.b85decode(s.encode('utf-8')).decode('utf-8')
-                except UnicodeDecodeError:
+                except:
                     return s
         elif self.base_number == 58:
             self.name = "Base58 encoding"
@@ -235,7 +235,7 @@ class BaseN(StringTransformation):
             def inverse_transformation(s):
                 try:
                     return base58.b58decode(s.encode('utf-8')).decode('utf-8')
-                except UnicodeDecodeError:
+                except:
                     return s
         else:
             raise ValueError(f"Unsupported base number: {self.base_number}")
@@ -505,6 +505,12 @@ class JSON_Encapsulation(StringTransformation):
                 unencapsulated_s = "\n".join(messages)
                 return unencapsulated_s
             except json.JSONDecodeError:
+                # try just the json "prefix"; if still no, then bypass
+                json_prefixes = ["{\"message\": \"", "{\"message\":\""]
+                for json_prefix in json_prefixes:
+                    if s.startswith(json_prefix):
+                        s_no_json_prefix = s[len(json_prefix):]
+                        return s_no_json_prefix
                 return s
 
         self._inverse = inverse_transformation
@@ -526,12 +532,28 @@ class LatexMode(StringTransformation):
             self._f = transformation
 
             def inverse_transformation(s):
-                start_tag, end_tag = "\\begin{document}", "\\end{document}"
+                start_tag, end_tag = "```latex\n", "\n```"
                 start_tag_idx = s.find(start_tag)
                 end_tag_idx = s.rfind(end_tag)
-                if start_tag_idx == -1 or end_tag_idx == -1: #style was not formed correctly... just bypass
+                if start_tag_idx != -1:
+                    before_latex = s[:start_tag_idx]
+                    if end_tag_idx != -1: #style was not formed correctly... just bypass
+                        latexed = s[start_tag_idx+len(start_tag):end_tag_idx]
+                        after_latex = s[end_tag_idx+len(end_tag):]
+                    else:
+                        latexed = s[start_tag_idx+len(start_tag):]
+                        after_latex = ""
+                else:    
                     return s
-                before_latex, latexed, after_latex = s[:start_tag_idx], s[start_tag_idx+len(start_tag):end_tag_idx], s[end_tag_idx+len(end_tag):]
+
+                latexed_start_tag, latexed_end_tag = "\\begin{document}", "\\end{document}"
+                latexed_start_tag_idx = latexed.find(latexed_start_tag)
+                latexed_end_tag_idx = latexed.rfind(latexed_end_tag)
+                if latexed_start_tag_idx != -1:
+                    if latexed_end_tag_idx != -1:
+                        latexed = latexed[latexed_start_tag_idx+len(latexed_start_tag):latexed_end_tag_idx]
+                    else:
+                        latexed = latexed[latexed_start_tag_idx+len(latexed_start_tag):]
                 latexed = re.sub(r"\\(\w+)(?:\[(.*?)\])?(?:\{(.*?)\})?", "", latexed)
                 return before_latex + latexed + after_latex
 
