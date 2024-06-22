@@ -94,15 +94,10 @@ class AdaptiveAttackExperiment(BaseExperiment):
             with open(load_path, 'r') as fin:
                 experiment_data = json.load(fin)
                 progress = len(experiment_data["data"])
-                if progress >= len(safety_dataset):
-                    print(f"Run already finished for this hyperparameter setting.")
-                    print(f"Skipping this run. Delete the file at {load_path} if you want to re-run.")
-                    return
-                else:
-                    print(f"{progress} of {len(safety_dataset)} samples already finished for this hyperparameter setting. Continuing...")
-                    bad_prompt_data = experiment_data["data"]
-                    raw_output_data = experiment_data["raw_outputs"]
-                    num_successful_attacks = sum(datum["successful"] for datum in bad_prompt_data)
+                print(f"{progress} of {len(safety_dataset)} samples already finished for this hyperparameter setting. Continuing...")
+                bad_prompt_data = experiment_data["data"]
+                raw_output_data = experiment_data["raw_outputs"]
+                num_successful_attacks = sum(datum["successful"] for datum in bad_prompt_data)
         else:
             experiment_data = {}
             experiment_header = self._raw_data_path(**hyperparam_setting)
