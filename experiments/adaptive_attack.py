@@ -50,7 +50,7 @@ RESPONSE_ALLOWED_TRANSFORMS = [PerWordReversal, CaesarCipher, ROT13Cipher, BaseN
 
 def adaptive_default_hparams():
     return {
-        "attack_budget": [20,],
+        "attack_budget": [25,],
     }
 @dataclass
 class AdaptiveAttackExperiment(BaseExperiment):
@@ -80,6 +80,7 @@ class AdaptiveAttackExperiment(BaseExperiment):
         super().__post_init__()
 
     def run(self, hyperparam_setting, config):
+        print(self.data_path(**hyperparam_setting))
         val_or_eval_or_llamaguard = config["val_or_eval_or_llamaguard"]
         val_or_eval = "val" if val_or_eval_or_llamaguard == "llamaguard" else val_or_eval_or_llamaguard
         safety_dataset = load_safety_data(val_or_eval)
@@ -111,11 +112,21 @@ class AdaptiveAttackExperiment(BaseExperiment):
             raw_output_data = []
             num_successful_attacks = 0
 
-        for i in tqdm(range(progress, len(safety_dataset)), desc="bad prompt"):
-            if i >= 50:
-                raise ValueError("kicking this run cause I'm going to sleep but this is just a subset")
-            __OFFSET = 250
-            bad_prompt = safety_dataset[i+__OFFSET]
+        for i in tqdm(range(len(safety_dataset)), desc="bad prompt"):
+            if i < progress:
+                if experiment_data["data"][i]["successful"]:
+                    print(f"Attack on query \"{experiment_data['data'][i]['behavior']}\" already succeeded; onto the next one...")
+                    continue
+                single_attack_progress = len(experiment_data["raw_outputs"][i]["continuations"])
+                if single_attack_progress >= attack_budget:
+                    print(f"Attack budget on query \"{experiment_data['data'][i]['behavior']}\" already exhausted; onto the next one...")
+                    continue
+                continuations = experiment_data["raw_outputs"][i]["continuations"]
+            else:
+                single_attack_progress = 0
+                continuations = []
+
+            bad_prompt = safety_dataset[i]
             if isinstance(bad_prompt, HarmBenchPrompt):
                 bad_prompt_behavior, bad_prompt_context = bad_prompt.behavior, bad_prompt.context
                 bad_prompt_as_input = bad_prompt_behavior + (f'\n{bad_prompt_context}' if bad_prompt_context is not None else "")
@@ -123,10 +134,9 @@ class AdaptiveAttackExperiment(BaseExperiment):
                 bad_prompt_behavior, bad_prompt_context = bad_prompt, None
                 bad_prompt_as_input = bad_prompt_behavior
 
-            continuations = []
             successful = False
 
-            for trial in tqdm(range(attack_budget), desc="attack trial", leave=False):
+            for trial in tqdm(range(single_attack_progress, attack_budget), desc="attack trial", leave=False):
 
                 adaptive_sampling_params = random.choice(ADAPTIVE_SAMPLING_OPTIONS)
                 if adaptive_sampling_params.composition_target == "response":
@@ -206,17 +216,23 @@ class AdaptiveAttackExperiment(BaseExperiment):
                     break
 
             tries_until_success = trial + 1 if successful else None
-            bad_prompt_data.append({
+            bad_prompt_datum = {
                 "behavior": bad_prompt_behavior,
                 "context": bad_prompt_context,
                 "successful": successful,
                 "tries_until_success": tries_until_success,
-            })
-            raw_output_data.append({
+            }
+            raw_output_datum = {
                 "behavior": bad_prompt_behavior,
                 "context": bad_prompt_context,
                 "continuations": continuations,
-            })
+            }
+            if i < progress:
+                bad_prompt_data[i] = bad_prompt_datum
+                raw_output_data[i] = raw_output_datum
+            else:
+                bad_prompt_data.append(bad_prompt_datum)
+                raw_output_data.append(raw_output_datum)
             experiment_data["data"] = bad_prompt_data
             experiment_data["raw_outputs"] = raw_output_data
 
