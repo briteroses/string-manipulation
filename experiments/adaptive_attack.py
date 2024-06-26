@@ -11,7 +11,7 @@ import random
 from tqdm import tqdm
 from models.black_box_model import GPTFamily
 from models.open_source_model import OpenSourceModel
-from utils.utils import ALL_ICL_EXEMPLARS, get_context_length_for_model, get_greedy_one_command, get_max_tokens_key
+from utils.utils import ALL_ICL_EXEMPLARS, get_output_length_for_model, get_greedy_one_command, get_max_tokens_key
 import wandb
 import yaml
 
@@ -80,7 +80,6 @@ class AdaptiveAttackExperiment(BaseExperiment):
         super().__post_init__()
 
     def run(self, hyperparam_setting, config):
-        print(self.data_path(**hyperparam_setting))
         val_or_eval_or_llamaguard = config["val_or_eval_or_llamaguard"]
         val_or_eval = "val" if val_or_eval_or_llamaguard == "llamaguard" else val_or_eval_or_llamaguard
         safety_dataset = load_safety_data(val_or_eval)
@@ -163,11 +162,18 @@ class AdaptiveAttackExperiment(BaseExperiment):
                     other_transform=other_transform,
                     composition_target=adaptive_sampling_params.composition_target)
                 
+                transformed_bad_prompt = bad_prompt_as_input
+                if adaptive_sampling_params.composition_target == "query":
+                    for transform in transform_list:
+                        transformed_bad_prompt = transform(transformed_bad_prompt)
+                elif adaptive_sampling_params.composition_target == "response":
+                    transformed_bad_prompt = other_transform(transformed_bad_prompt)
+                
                 attack_prompt = composition_prompt.substitute(
                     LIST_TRANSFORMATIONS=list_transformations_prompt,
                     TRANSFORMATION_INSTRUCTIONS=transformation_instructions_prompt,
                     ICL_DEMONSTRATIONS=icl_demonstrations_prompt,
-                    bad_prompt=bad_prompt_as_input,
+                    bad_prompt=transformed_bad_prompt,
                 )
 
                 greedy_one = get_greedy_one_command(self.target_model)
@@ -201,9 +207,7 @@ class AdaptiveAttackExperiment(BaseExperiment):
                     "continuation": continuation,
                 })
                 
-                # try:
                 single_asr = judge(bad_prompt_behavior, continuation, bad_prompt_context)
-                # except openai.BadRequestError:
 
                 if single_asr == 100:
                     successful = True
@@ -288,7 +292,7 @@ class AdaptiveAttackExperiment(BaseExperiment):
         if issubclass_option(transform_s, _STYLES):
             num_toks += 200
         num_toks = int(num_toks)
-        num_toks = min(num_toks, get_context_length_for_model(self.target_model))
+        num_toks = min(num_toks, get_output_length_for_model(self.target_model))
         return num_toks
 
 

@@ -4,6 +4,7 @@ __pycache__/
 **/__pycache__/
 /experiments/experiment_data/
 /experiments/stash/
+/models/secret.py
 /wandb
 
 .env

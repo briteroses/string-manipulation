@@ -34,6 +34,7 @@ def download_all_models_to_modal_image(model_dir: str, model_preloads: str | Lis
 #     modal.Image.debian_slim(python_version="3.10")
 #     .pip_install(
 #         "accelerate",
+#         "anthropic",
 #         "base58",
 #         "bitsandbytes",
 #         "cohere",
@@ -71,6 +72,7 @@ cheap_image = (
     modal.Image.debian_slim(python_version="3.10")
     .pip_install(
         "accelerate",
+        "anthropic",
         "base58",
         "bitsandbytes",
         "cohere",

@@ -34,7 +34,7 @@ from itertools import chain
 from pathlib import Path
 from typing import Callable
 
-from models.black_box_model import GPT3pt5_Turbo, GPTFamily, HaizerMistral
+from models.black_box_model import ClaudeFamily, GPT3pt5_Turbo, GPTFamily, HaizerMistral
 from models.model_class import LanguageModel
 from string_transformations.consts import ALPHABET, LEETSPEAK_DICT, MORSE_DICT, VOWELS
 
@@ -194,7 +194,7 @@ class BaseN(StringTransformation):
     def __post_init__(self):
         if self.base_number == 16:
             self.name = "Base16 encoding"
-            self.instruction = "Encode the string using Base16 encoding."
+            self.instruction = "Encode the string using Base16 encoding. Output only the encoding."
             transformation = lambda s: base64.b16encode(s.encode('utf-8')).decode('utf-8')
             def inverse_transformation(s):
                 try:
@@ -203,7 +203,7 @@ class BaseN(StringTransformation):
                     return s
         elif self.base_number == 32:
             self.name = "Base32 encoding"
-            self.instruction = "Encode the string using Base32 encoding."
+            self.instruction = "Encode the string using Base32 encoding. Output only the encoding."
             transformation = lambda s: base64.b32encode(s.encode('utf-8')).decode('utf-8')
             def inverse_transformation(s):
                 try:
@@ -212,7 +212,7 @@ class BaseN(StringTransformation):
                     return s
         elif self.base_number == 64:
             self.name = "Base64 encoding"
-            self.instruction = "Encode the string using Base64 encoding."
+            self.instruction = "Encode the string using Base64 encoding. Output only the encoding."
             transformation = lambda s: base64.b64encode(s.encode('utf-8')).decode('utf-8')
             def inverse_transformation(s):
                 try:
@@ -221,7 +221,7 @@ class BaseN(StringTransformation):
                     return s
         elif self.base_number == 85:
             self.name = "Base85 encoding"
-            self.instruction = "Encode the string using Base85 encoding."
+            self.instruction = "Encode the string using Base85 encoding. Output only the encoding."
             transformation = lambda s: base64.b85encode(s.encode('utf-8')).decode('utf-8')
             def inverse_transformation(s):
                 try:
@@ -230,7 +230,7 @@ class BaseN(StringTransformation):
                     return s
         elif self.base_number == 58:
             self.name = "Base58 encoding"
-            self.instruction = "Encode the string using Base58 encoding."
+            self.instruction = "Encode the string using Base58 encoding. Output only the encoding."
             transformation = lambda s: base58.b58encode(s.encode('utf-8')).decode('utf-8')
             def inverse_transformation(s):
                 try:
@@ -448,7 +448,7 @@ class PythonMarkdown(StringTransformation):
     instruction = "Change the string to be in Python in a markdown format."
 
     def __post_init__(self, model_type):
-        if issubclass(model_type, GPTFamily):
+        if issubclass(model_type, (GPTFamily, ClaudeFamily)):
             # currently, just removes the ```python {message} ``` scaffolding, and removes the multiline string quotations that are often put around the message
             def transformation(s):
                 markdown_s = '```python\n"""' + s + '"""\n```'
@@ -457,11 +457,12 @@ class PythonMarkdown(StringTransformation):
             self._f = transformation
 
             def inverse_transformation(s):
-                start_tag, end_tag = "```python\n", "\n```"
-                start_tag_idx = s.find(start_tag)
+                start_tags, end_tag = ("```python\n", "```markdown\n"), "\n```"
+                start_tag_idxs = [s.find(start_tag) for start_tag in start_tags]
                 end_tag_idx = s.rfind(end_tag)
-                if start_tag_idx == -1 or end_tag_idx == -1: #style was not formed correctly... just bypass
+                if all(start_tag_idx == -1 for start_tag_idx in start_tag_idxs) or end_tag_idx == -1: #style was not formed correctly... just bypass
                     return s
+                start_tag_idx, start_tag = next(st for st in zip(start_tag_idxs, start_tags) if st[0] != -1)
                 stripped_s = s[:start_tag_idx] + s[start_tag_idx+len(start_tag):end_tag_idx] + s[end_tag_idx+len(end_tag):]
                 stripped_s = stripped_s.replace('"""', '')
                 return stripped_s
@@ -478,7 +479,7 @@ class PythonMarkdown(StringTransformation):
 class JSON_Encapsulation(StringTransformation):
     # WARNING: relies on how the given model interprets json encapsulation; possibly need per-model casework
     name = "JSON encapsulation"
-    instruction = "Change the string to be encapsulated in a json format."
+    instruction = "Change the string to be encapsulated in a json format. Output only the json."
 
     def __post_init__(self):
         def transformation(s):
@@ -501,7 +502,10 @@ class JSON_Encapsulation(StringTransformation):
 
         def inverse_transformation(s):
             try:
-                messages = unpack_dict(json.loads(s, strict=False))
+                beginning_of_json = "{\"message\":"
+                assert s.find(beginning_of_json) != -1
+                truncate_s = s[s.find(beginning_of_json):]
+                messages = unpack_dict(json.loads(truncate_s, strict=False))
                 unencapsulated_s = "\n".join(messages)
                 return unencapsulated_s
             except json.JSONDecodeError:
@@ -524,7 +528,7 @@ class LatexMode(StringTransformation):
     instruction = "Change the string to be part of a LaTeX document."
 
     def __post_init__(self, model_type):
-        if issubclass(model_type, GPTFamily):
+        if issubclass(model_type, (GPTFamily, ClaudeFamily)):
             def transformation(s):
                 markdown_s = "```latex\n\\documentclass[12pt]{article}\n\n\\begin{document}\n\n" + s + "\n\n\\end{document}\n```"
                 return markdown_s
@@ -532,6 +536,18 @@ class LatexMode(StringTransformation):
             self._f = transformation
 
             def inverse_transformation(s):
+                def inner_latex_inversion(latexed):
+                    latexed_start_tag, latexed_end_tag = "\\begin{document}", "\\end{document}"
+                    latexed_start_tag_idx = latexed.find(latexed_start_tag)
+                    latexed_end_tag_idx = latexed.rfind(latexed_end_tag)
+                    if latexed_start_tag_idx != -1:
+                        if latexed_end_tag_idx != -1:
+                            latexed = latexed[latexed_start_tag_idx+len(latexed_start_tag):latexed_end_tag_idx]
+                        else:
+                            latexed = latexed[latexed_start_tag_idx+len(latexed_start_tag):]
+                    latexed = re.sub(r"\\(\w+\*?)(?:\[(.*?)\])?(?:\{(.*?)\}:?)?", "", latexed)
+                    return latexed
+
                 start_tag, end_tag = "```latex\n", "\n```"
                 start_tag_idx = s.find(start_tag)
                 end_tag_idx = s.rfind(end_tag)
@@ -543,18 +559,12 @@ class LatexMode(StringTransformation):
                     else:
                         latexed = s[start_tag_idx+len(start_tag):]
                         after_latex = ""
-                else:    
-                    return s
+                else:
+                    yolo_the_whole_string = inner_latex_inversion(s)
+                    return yolo_the_whole_string
 
-                latexed_start_tag, latexed_end_tag = "\\begin{document}", "\\end{document}"
-                latexed_start_tag_idx = latexed.find(latexed_start_tag)
-                latexed_end_tag_idx = latexed.rfind(latexed_end_tag)
-                if latexed_start_tag_idx != -1:
-                    if latexed_end_tag_idx != -1:
-                        latexed = latexed[latexed_start_tag_idx+len(latexed_start_tag):latexed_end_tag_idx]
-                    else:
-                        latexed = latexed[latexed_start_tag_idx+len(latexed_start_tag):]
-                latexed = re.sub(r"\\(\w+)(?:\[(.*?)\])?(?:\{(.*?)\})?", "", latexed)
+                latexed = inner_latex_inversion(latexed)
+
                 return before_latex + latexed + after_latex
 
             self._inverse = inverse_transformation

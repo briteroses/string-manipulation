@@ -3,7 +3,7 @@ import numpy as np
 from typing_extensions import assert_never
 
 from models.model_class import LanguageModel
-from models.black_box_model import BlackBoxModel, CohereFamily, GPTFamily, GeminiFamily
+from models.black_box_model import BlackBoxModel, ClaudeFamily, CohereFamily, GPTFamily, GeminiFamily
 from models.open_source_model import OpenSourceModel
 
 
@@ -29,6 +29,8 @@ def get_greedy_one_command(model: LanguageModel):
     match model:
         case GPTFamily():
             return {"n": 1, "temperature": 0}
+        case ClaudeFamily():
+            return {"n": 1, "temperature": 0}
         case GeminiFamily():
             return {"candidate_count": 1, "temperature": 0}
         case CohereFamily():
@@ -38,11 +40,14 @@ def get_greedy_one_command(model: LanguageModel):
         case _ as unreachable:
             assert_never(unreachable)
 
-def get_context_length_for_model(model: LanguageModel):
+def get_output_length_for_model(model: LanguageModel):
     match model:
         case GPTFamily():
             return 4096
+        case ClaudeFamily():
+            return 4096
         case _:
+            print("WARNING: probably unimplemented or unknown output length")
             return float('inf')
             
 

@@ -9,6 +9,7 @@ import yaml
 
 from models.model_class import LanguageModel
 
+from anthropic import Anthropic
 import cohere
 import google.generativeai as gemini
 from openai import OpenAI, BadRequestError
@@ -254,6 +255,85 @@ class GPT_Davinci(LegacyGPT):
     scale = None
     scale_ranking = 5
 
+@dataclass
+class ClaudeFamily(BlackBoxModel):
+    max_api_retries = CFG["anthropic"]["max_api_retries"]
+
+    def __post_init__(self):
+        if hasattr(self, 'override_key'):
+            self.client = Anthropic(api_key=self.override_key)
+        else:
+            self.client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        super().__post_init__()
+    
+    @property
+    def vocabulary(self):
+        raise NotImplementedError
+
+    def inference(self, prompt: str | List[Dict], **optional_params):
+        for i in range(self.max_api_retries):
+            try:
+                inference_params = {
+                    param: optional_params.get(param, value)
+                    for param, value in chain(CFG["anthropic"]["inference_api"].items(), optional_params.items())
+                }
+                n = inference_params.pop("n")
+                
+                if isinstance(prompt, str):
+                    messages = [
+                        {"role": "user", "content": prompt},
+                    ]
+                elif isinstance(prompt, List):
+                    messages = prompt
+
+                continuations = []
+                for _ in range(n):
+                    response = self.client.messages.create(
+                        model=self.name,
+                        messages=messages,
+                        **inference_params,
+                    )
+                    continuations.append(response.content[0].text)
+
+                return continuations
+            
+            except Exception as e:
+                print(type(e), e)
+                print(f"Anthropic API call failed, sleeping for {10 * (i+1)} seconds...")
+                time.sleep(10 * (i + 1))
+
+    def get_output_logits(self, prompt: str, **optional_params):
+        raise NotImplementedError
+    
+    def token_from_index(self, index: int):
+        raise NotImplementedError
+
+    def finetune(self, dataset_path: str, save_name: str):
+        raise NotImplementedError
+
+@dataclass
+class Claude_3pt5_Sonnet(ClaudeFamily):
+    name = "claude-3-5-sonnet-20240620"
+    description = "Strong next-generation model in Anthropic API family"
+    scale = None
+
+@dataclass
+class Claude_3_Opus(ClaudeFamily):
+    name = "claude-3-opus-20240229"
+    description = "Large model in Anthropic Claude 3 family"
+    scale = None
+
+@dataclass
+class Claude_3_Sonnet(ClaudeFamily):
+    name = "claude-3-sonnet-20240229"
+    description = "Medium model in Anthropic Claude 3 family"
+    scale = None
+
+@dataclass
+class Claude_3_Haiku(ClaudeFamily):
+    name = "claude-3-haiku-20240307"
+    description = "Small model in Anthropic Claude 3 family"
+    scale = None
 
 @dataclass
 class GeminiFamily(BlackBoxModel):
