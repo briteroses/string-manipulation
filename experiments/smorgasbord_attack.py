@@ -11,6 +11,7 @@ import random
 from tqdm import tqdm
 from models.black_box_model import GPTFamily
 from models.open_source_model import OpenSourceModel
+from string_transformations.instruction_augmentations import sample_augmentations
 from utils.utils import ALL_ICL_EXEMPLARS, get_output_length_for_model, get_greedy_one_command, get_max_tokens_key
 import wandb
 import yaml
@@ -40,21 +41,21 @@ AdaptiveSamplingParams = namedtuple("AdaptiveSamplingParams", "composition_targe
 ADAPTIVE_SAMPLING_OPTIONS = [
     AdaptiveSamplingParams("query", 1),
     AdaptiveSamplingParams("query", 2),
-    AdaptiveSamplingParams("query", 3),
     AdaptiveSamplingParams("response", 1),
     AdaptiveSamplingParams("response", 2),
     AdaptiveSamplingParams("response", 3),
 ]
+UNIVERSAL_PIECES_OPTIONS = [1, 2, 3]
 
 QUERY_ALLOWED_TRANSFORMS = [Reversal, PerWordReversal, WordLevelReversal, CaesarCipher, ROT13Cipher, BaseN, Binary, Leetspeak, MorseCode, VowelRepetition, AlternatingCase, Palindrome, Delimiters, PrefixRotation]
 RESPONSE_ALLOWED_TRANSFORMS = [PerWordReversal, CaesarCipher, ROT13Cipher, BaseN, Binary, Leetspeak, MorseCode, VowelRepetition, AlternatingCase, Palindrome, Delimiters, PythonMarkdown, JSON_Encapsulation, LatexMode]
 
 def adaptive_default_hparams():
     return {
-        "attack_budget": [30,],
+        "attack_budget": [1,],
     }
 @dataclass
-class AdaptiveAttackExperiment(BaseExperiment):
+class ObfuscationsPlusUniversalExperiment(BaseExperiment):
     target_model: LanguageModel
 
     hyperparameter_grid: dict = field(default_factory=adaptive_default_hparams)
@@ -81,9 +82,9 @@ class AdaptiveAttackExperiment(BaseExperiment):
         super().__post_init__()
 
     def run(self, hyperparam_setting, config):
-        val_or_eval_or_other = config["val_or_eval_or_other"]
-        val_or_eval = "val" if val_or_eval_or_other == "val" else "eval"
-        safety_dataset = load_safety_data(val_or_eval_or_other)
+        val_or_eval_or_llamaguard = config["val_or_eval_or_llamaguard"]
+        val_or_eval = "val" if val_or_eval_or_llamaguard == "llamaguard" else val_or_eval_or_llamaguard
+        safety_dataset = load_safety_data(val_or_eval)
         judge = HarmBenchJudge(val_or_eval)
 
         attack_budget = hyperparam_setting["attack_budget"]
@@ -163,7 +164,21 @@ class AdaptiveAttackExperiment(BaseExperiment):
                     other_transform=other_transform,
                     composition_target=adaptive_sampling_params.composition_target)
                 
-                transformed_bad_prompt = bad_prompt_as_input
+                # ~~~~~~~~~~
+                # the new part vs. the adaptive attack
+                augment_list = []
+                augment_classes = sample_augmentations(random.choice(UNIVERSAL_PIECES_OPTIONS))
+                for augment_class in augment_classes:
+                    augment = augment_class.construct()
+                    augment_list.append(augment)
+                augment_printout = list(map(str, augment_list))
+
+                augmented_bad_prompt = bad_prompt_as_input
+                for augment in augment_list:
+                    augmented_bad_prompt = augment(augmented_bad_prompt)
+                # ~~~~~~~~~~
+
+                transformed_bad_prompt = augmented_bad_prompt
                 if adaptive_sampling_params.composition_target == "query":
                     for transform in transform_list:
                         transformed_bad_prompt = transform(transformed_bad_prompt)
@@ -176,6 +191,7 @@ class AdaptiveAttackExperiment(BaseExperiment):
                     ICL_DEMONSTRATIONS=icl_demonstrations_prompt,
                     bad_prompt=transformed_bad_prompt,
                 )
+                print(attack_prompt)
 
                 greedy_one = get_greedy_one_command(self.target_model)
                 if adaptive_sampling_params.composition_target == "response":
@@ -185,6 +201,7 @@ class AdaptiveAttackExperiment(BaseExperiment):
                 greedy_one[get_max_tokens_key(self.target_model)] = num_toks
 
                 continuation = self.target_model.inference(attack_prompt, **greedy_one)[0]
+                raw_continuation = continuation
 
                 try:
                     if adaptive_sampling_params.composition_target == "response":
@@ -205,6 +222,10 @@ class AdaptiveAttackExperiment(BaseExperiment):
                 continuations.append({
                     "query": query_transform_printout,
                     "response": response_transform_printout,
+                    "augment": augment_printout,
+                    "augmented_query": augmented_bad_prompt,
+                    "attack_prompt": attack_prompt,
+                    "raw_continuation": raw_continuation,
                     "continuation": continuation,
                 })
                 
@@ -295,14 +316,14 @@ class AdaptiveAttackExperiment(BaseExperiment):
         num_toks = int(num_toks)
         num_toks = min(num_toks, get_output_length_for_model(self.target_model))
         return num_toks
-
+    
 
 def baseline_empty_hparams():
     return {
         "placeholder": 0,
     }
 @dataclass
-class BaselineNoAttackExperiment(BaseExperiment):
+class BaselineUniversalExperiment(BaseExperiment):
     target_model: LanguageModel
 
     hyperparameter_grid: dict = field(default_factory=baseline_empty_hparams) # singleton & unused hparam grid to fit the experiment class specification
@@ -345,10 +366,23 @@ class BaselineNoAttackExperiment(BaseExperiment):
                 bad_prompt_behavior, bad_prompt_context = bad_prompt, None
                 bad_prompt_as_input = bad_prompt_behavior
             
+            # ~~~~~~~~~~
+            # the new part vs. the adaptive attack
+            augment_list = []
+            augment_classes = sample_augmentations(random.choice(UNIVERSAL_PIECES_OPTIONS))
+            for augment_class in augment_classes:
+                augment = augment_class.construct()
+                augment_list.append(augment)
+
+            augmented_bad_prompt = bad_prompt_as_input
+            for augment in augment_list:
+                augmented_bad_prompt = augment(augmented_bad_prompt)
+            # ~~~~~~~~~~
+            
             greedy_one = get_greedy_one_command(self.target_model)
             greedy_one[get_max_tokens_key(self.target_model)] = 512
 
-            continuation = self.target_model.inference(bad_prompt_as_input, **greedy_one)[0]
+            continuation = self.target_model.inference(augmented_bad_prompt, **greedy_one)[0]
 
             single_asr = judge(bad_prompt_behavior, continuation, bad_prompt_context)
 
@@ -361,6 +395,7 @@ class BaselineNoAttackExperiment(BaseExperiment):
                 "behavior": bad_prompt_behavior,
                 "context": bad_prompt_context,
                 "successful": successful,
+                "augmented_query": augmented_bad_prompt,
                 "continuation": continuation,
             })
             experiment_data["data"] = bad_prompt_data

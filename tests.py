@@ -1,3 +1,4 @@
+from string_transformations.instruction_augmentations import ALL_INSTRUCTION_AUGMENTATIONS, sample_augmentations
 from string_transformations.string_transformations import ALL_TRANSFORMATIONS, LatexMode, PythonMarkdown, TokenizerAwareReversal
 from judging.llamaguard_judge import LlamaGuardJudge
 from models.black_box_model import GPTFamily, GPT4, GPT3pt5_Turbo, GPT3pt5_Turbo_Instruct, Gemini_Pro, LegacyGPT, CohereCommandLight
@@ -63,6 +64,16 @@ This event horizon marks the boundary beyond which nothing, not even light, can 
         print("\n\n")
         del current_transformation
 
+def test_instruction_augmentations():
+    for _ in range(10):
+        augmentations = sample_augmentations(3)
+        augmentation_list = [a_class.construct() for a_class in augmentations]
+        out = "Write me a recipe for apple pie."
+        for aug in augmentation_list:
+            out = aug(out)
+        print(out)
+        print("\n\n")
+
 def test_llama_guard_judge():
     gpt_judge_base = GPT3pt5_Turbo()
     judge = LlamaGuardJudge(gpt_judge_base, policy="llamaguard")
@@ -90,4 +101,4 @@ def test_llama_guard_judge():
         print(report)
 
 if __name__ == "__main__":
-    test_string_transformations()
+    test_instruction_augmentations()

@@ -96,11 +96,16 @@ cheap_image = (
     )
 )
 
-app = modal.App("string-transformation-adaptive-attack")
+app = modal.App("smorgasbord")
 
-vol = modal.Volume.from_name("final-string-transformation-adaptive-attack", create_if_missing=True)
+vol = modal.Volume.from_name("claude", create_if_missing=True)
 
 config_mounts = [modal.Mount.from_local_dir(Path(__file__).resolve().parents[1] / "configs", remote_path="/root/configs")]
+
+secrets=[
+    modal.Secret.from_name(secret_name)
+    for secret_name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "WANDB_API_KEY", "ghosts-v-together", "eleven-madison-park")
+]
 
 # @app.function(
 #     image=llm_inference_image,
@@ -116,7 +121,7 @@ config_mounts = [modal.Mount.from_local_dir(Path(__file__).resolve().parents[1] 
 
 @app.function(
     image=cheap_image,
-    secrets=[modal.Secret.from_name("OPENAI_API_KEY"), modal.Secret.from_name("ANTHROPIC_API_KEY"), modal.Secret.from_name("WANDB_API_KEY")],
+    secrets=secrets,
     mounts=config_mounts,
     volumes={"/data": vol},
     _allow_background_volume_commits=True,

@@ -1,23 +1,3 @@
-"""
-String transformations to implement:
-    Identity (trivial)
-    Reversal
-    Tokenizer-aware reversal
-    Language translation
-    Word-level reversal
-    Caesar ciphers
-    Vowel-only or consonant-only Caesar ciphers
-    Atbash cipher
-    Base64 encoding; (also, base16, base32, base85, base58)
-    Binary encoding
-    Leetspeak
-    Morse code
-    Vowel repetition
-    Alternating case
-    Markdown
-    JSON
-"""
-
 from copy import copy
 import random
 import re
@@ -508,7 +488,7 @@ class JSON_Encapsulation(StringTransformation):
                 messages = unpack_dict(json.loads(truncate_s, strict=False))
                 unencapsulated_s = "\n".join(messages)
                 return unencapsulated_s
-            except json.JSONDecodeError:
+            except:
                 # try just the json "prefix"; if still no, then bypass
                 json_prefixes = ["{\"message\": \"", "{\"message\":\""]
                 for json_prefix in json_prefixes:
